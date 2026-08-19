@@ -1,0 +1,130 @@
+{
+  "welcome": "Bienvenue sur Artiva!",
+  "greeting": "Bonjour, {{name}}",
+  "common": {
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "confirm": "Confirmer",
+    "edit": "Modifier",
+    "loading": "Chargement...",
+    "error": "Erreur",
+    "success": "Succès",
+    "deactivate": "Désactiver",
+    "retry": "Réessayer",
+    "unavailable": "N/A"
+  },
+  "tabHeaders": {
+    "home": "Accueil",
+    "shop": "Boutique",
+    "wishlist": "Souhaits",
+    "cart": "Panier",
+    "profile": "Profil",
+    "settings": "Paramètres"
+  },
+  "homePage": {
+    "sections": {
+      "categories": "Catégories",
+      "tag_nouveauté": "Nouveautés",
+      "tag_populaire": "Populaires",
+      "tag_pourvous": "Pour Vous",
+      "tag_meilleuresventes": "Meilleures Ventes",
+      "tag_promotion": "Promotions"
+    }
+  },
+  "shopScreen": {
+    "searchPlaceholder": "Rechercher des produits...",
+    "noCategories": "Aucune catégorie.",
+    "noProducts": "Aucun produit dans cette sélection.",
+    "noProductsSearch": "Aucun produit ne correspond à votre recherche.",
+    "selectCategory": "Sélectionnez une catégorie.",
+    "selectSubCategory": "Sélectionnez une sous-catégorie."
+  },
+  "settingsScreen": {
+    "title": "Mes Paramètres",
+    "editProfile": "Modifier le Profil",
+    "changePassword": "Changer le Mot de Passe",
+    "preferences": "Préférences d'Affichage",
+    "language": "Langue",
+    "deactivateAccount": "Supprimer mon compte",
+    "deactivate": {
+      "confirmTitle": "Confirmation",
+      "confirmMessage": "Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est irréversible.",
+      "successTitle": "Compte supprimé",
+      "successMessage": "Votre compte a été supprimé avec succès. Vous allez être déconnecté.",
+      "genericError": "Une erreur est survenue lors de la suppression du compte."
+    }
+  },
+  "productDetail": {
+    "addToCart": "Ajouter au panier",
+    "unavailable": "Indisponible",
+    "quantity": "Quantité",
+    "stockAvailable": "Stock disponible : {{count}}",
+    "descriptionTitle": "Description du produit",
+    "selectOptions": "Sélectionnez les options",
+    "category": "Catégorie",
+    "tags": "Tags"
+  },
+  "cartScreen": {
+    "title": "Votre Panier",
+    "emptyCart": "Votre panier est vide.",
+    "loginToViewCart": "Connectez-vous pour voir votre panier.",
+    "subtotal": "Sous-total",
+    "shipping": "Frais de livraison",
+    "toCalculate": "À calculer",
+    "total": "Total",
+    "checkout": "Valider et Payer",
+    "remove": "Supprimer",
+    "updateQuantity": "Mettre à jour la quantité"
+  },
+   "editProfileScreen": {
+        "name": "Nom complet",
+        "address": "Adresse",
+        "phone": "Numéro de téléphone",
+        "save": "Enregistrer les modifications",
+        "nameRequired": "Le nom est requis",
+        "addressInvalid": "Adresse invalide",
+        "phoneInvalid": "Numéro de téléphone invalide",
+        "profileUpdated": "Profil mis à jour",
+        "noChanges": "Aucune modification détectée"
+    },
+    "changePasswordScreen": {
+        "currentPassword": "Mot de passe actuel",
+        "newPassword": "Nouveau mot de passe",
+        "confirmPassword": "Confirmer le nouveau mot de passe",
+        "updatePassword": "Mettre à jour le mot de passe",
+        "passwordMismatch": "Les mots de passe ne correspondent pas",
+        "passwordLength": "Le mot de passe doit contenir au moins 6 caractères",
+        "passwordUpdated": "Mot de passe mis à jour",
+        "logout": "Vous allez être déconnecté pour des raisons de sécurité"
+    },
+      "loginScreen": {
+        "title": "Connexion",
+        "email": "Adresse e-mail",
+        "password": "Mot de passe",
+        "loginButton": "Se connecter",
+        "registerLink": "Pas de compte ? S'inscrire",
+        "forgotPasswordLink": "Mot de passe oublié ?"
+    },
+   "WishlistScreen":{
+  "Empty" : "Votre liste de souhaits est vide." ,
+   "Tap" : "Appuyez sur le ❤️ sur les produits pour les ajouter."
+  },
+   "loadingData": "Chargement des données...",
+    "tagScreen": {
+        "titlePrefix": "Produits:",
+        "defaultTitle": "Produits par Tag",
+        "missingTag": "Nom du tag manquant.",
+        "fetchError": "Erreur lors du chargement des produits pour le tag",
+        "invalidData": "Format de données produits inattendu.",
+        "fetchGenericError": "Impossible de charger les produits pour ce tag.",
+        "noProducts": "Aucun produit trouvé pour \"{{tag}}\""
+    },
+        "categoryScreen": {
+        "defaultTitle": "Catégorie {{categoryId}}",
+        "missingCategoryId": "ID de catégorie manquant.",
+        "fetchError": "Erreur lors du chargement des produits pour la catégorie",
+        "invalidData": "Format de données produits inattendu.",
+        "fetchGenericError": "Impossible de charger les produits pour cette catégorie.",
+        "noProducts": "Aucun produit trouvé dans cette catégorie."
+    }
+}

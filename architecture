@@ -1,0 +1,102 @@
+/ARTIVA/  (ou E_Artiva/)                 <-- Dossier racine de tout ton projet
+│
+├── admin_panel/                        <-- Interface Web d'Administration (React)
+│   ├── node_modules/                   # Dépendances de l'admin panel (ignoré par Git)
+│   ├── public/                         # Fichiers statiques (index.html, favicon, etc.)
+│   ├── src/                            # Code source de l'admin panel
+│   │   ├── components/                 # Composants React réutilisables pour l'admin
+│   │   │   ├── CategoryFormModal.js
+│   │   │   ├── OrderDetailsModal.js
+│   │   │   ├── ProductFormModal.js
+│   │   │   └── UserFormModal.js        # (Si créé)
+│   │   ├── pages/                      # Pages principales de l'admin panel
+│   │   │   ├── CategoryManagementPage.js
+│   │   │   ├── DashboardPage.js
+│   │   │   ├── LoginPage.js
+│   │   │   ├── OrderManagementPage.js
+│   │   │   ├── ProductManagementPage.js
+│   │   │   ├── ProductTagsPage.js
+│   │   │   ├── ReportsPage.js          # (Placeholder)
+│   │   │   └── UserManagementPage.js
+│   │   ├── styles/                     # (Optionnel, si tu as un dossier pour CSS global)
+│   │   │   └── Layout.css              # (Ou App.css directement dans src/)
+│   │   ├── App.css                     # Styles globaux ou spécifiques à App.js
+│   │   ├── App.js                      # Composant racine et routage (React Router DOM)
+│   │   ├── index.js                    # Point d'entrée de l'application React Web
+│   │   └── ...                         # Autres fichiers (ex: service workers, setupTests)
+│   ├── .env                            # Variables d'environnement (local, non versionné)
+│   ├── .gitignore                      # Fichiers ignorés par Git pour l'admin panel
+│   ├── package-lock.json
+│   └── package.json
+│
+├── back_end/                           # API Backend Node.js
+│   ├── node_modules/                   # Dépendances du backend (ignoré par Git)
+│   ├── config/                         # Configuration
+│   │   └── db.js                       # Connexion à PostgreSQL (avec 'pg')
+│   ├── controllers/                    # Logique métier pour chaque ressource
+│   │   ├── authController.js
+│   │   ├── categoryController.js
+│   │   ├── orderController.js
+│   │   ├── productController.js
+│   │   ├── productTagController.js
+│   │   └── userController.js
+│   │   └── wishlistController.js
+│   ├── middlewares/                    # Middlewares Express
+│   │   ├── adminMiddleware.js
+│   │   └── authMiddleware.js
+│   ├── routes/                         # Définition des routes Express
+│   │   ├── authRoutes.js
+│   │   ├── categoryRoutes.js
+│   │   ├── orderRoutes.js
+│   │   ├── productRoutes.js
+│   │   ├── productTagRoutes.js
+│   │   ├── userRoutes.js
+│   │   └── wishlistRoutes.js
+│   ├── .env                            # Variables d'environnement (BDD, JWT_SECRET, etc. - non versionné)
+│   ├── .gitignore                      # Fichiers ignorés par Git pour le backend
+│   ├── app.js                          # Configuration de l'application Express
+│   ├── server.js                       # Point d'entrée du serveur Node.js
+│   ├── package-lock.json
+│   └── package.json
+│
+└── front_end/                          # Application mobile Expo (React Native)
+    ├── node_modules/                   # Dépendances du frontend mobile (ignoré par Git)
+    ├── app/                            # Routes et écrans gérés par Expo Router
+    │   ├── (tabs)/                     # Groupe pour la navigation par onglets principaux
+    │   │   ├── CartScreen.tsx
+    │   │   ├── index.tsx               # (Écran d'Accueil)
+    │   │   ├── ProfileScreen.tsx
+    │   │   ├── ShopScreen.tsx
+    │   │   ├── WishlistScreen.tsx      # (Anciennement TrendScreen)
+    │   │   └── _layout.tsx             # Configuration des onglets (Tabs)
+    │   ├── category-products/          # Route pour afficher les produits d'une catégorie
+    │   │   └── [categoryId].tsx
+    │   ├── product/                    # Route pour afficher le détail d'un produit
+    │   │   └── [id].tsx
+    │   ├── checkout.tsx              # (À créer pour la validation de commande)
+    │   ├── index.tsx                 # Point d'entrée logique (redirige vers login ou (tabs))
+    │   ├── login.tsx
+    │   ├── register.tsx
+    │   └── _layout.tsx               # Layout Racine de l'application Expo (Stack Navigator, Providers)
+    ├── assets/                         # Images, polices, icônes statiques pour l'app mobile
+    ├── components/                     # Composants React Native réutilisables
+    │   ├── CategoryCard.tsx
+    │   ├── ProductCard.tsx
+    │   ├── ScrollSection.tsx
+    │   ├── Themed.tsx                # (Souvent fourni par le template Expo)
+    │   └── ...
+    ├── constants/                      # Constantes (ex: Colors.ts, Layout.ts)
+    ├── context/                        # Contextes React pour la gestion d'état globale
+    │   ├── AuthContext.tsx
+    │   ├── CartContext.tsx
+    │   └── WishlistContext.tsx
+    ├── hooks/                          # Hooks personnalisés (ex: useColorScheme.web.ts)
+    ├── .env                            # (Si tu utilises des variables d'env spécifiques au build Expo - rare)
+    ├── .expo/                          # Dossier de configuration et de cache Expo (ignoré par Git)
+    ├── .gitignore                      # Fichiers ignorés par Git pour le frontend mobile
+    ├── app.json                        # Configuration principale d'Expo
+    ├── babel.config.js
+    ├── metro.config.js
+    ├── package-lock.json
+    ├── package.json
+    └── tsconfig.json                   # Configuration TypeScript

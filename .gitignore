@@ -1,4 +1,26 @@
+# Dependencies
 node_modules/
+.expo/
+.netlify/
+
+# Android / Gradle
+.gradle/
+android/.gradle/
+android/build/
+android/app/build/
+**/android/.gradle/
+**/android/build/
+**/android/app/build/
+
+# Local configuration
+local.properties
+**/local.properties
+
+# Environment / secrets
 .env
 .env.*
 !.env.example
+
+# Android signing keys
+*.jks
+*.keystore

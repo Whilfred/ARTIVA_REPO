@@ -1,0 +1,24 @@
+{
+  "devDependencies": {
+    "@types/react": "~19.1.10",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@expo/vector-icons": "^15.0.3",
+    "expo": "~54.0.25",
+    "expo-linking": "~8.0.9",
+    "expo-router": "~6.0.15",
+    "expo-splash-screen": "~31.0.11",
+    "expo-system-ui": "~6.0.8",
+    "expo-web-browser": "~15.0.9",
+    "jest-expo": "~54.0.13",
+    "react-native": "^0.81.5",
+    "react": "19.1.0"
+  },
+  "name": "E_Artiva",
+  "version": "1.0.0",
+  "scripts": {
+    "android": "expo run:android",
+    "ios": "expo run:ios"
+  }
+}

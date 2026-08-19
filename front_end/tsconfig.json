@@ -1,0 +1,17 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "jsx": "react-jsx" // Ou "react", "preserve". "react-jsx" est courant.
+    // "paths": { // Si tu utilises des alias de chemin
+    //   "@/*": ["./*"]
+    // }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
+  ]
+  // "exclude": ["node_modules"] // Est généralement géré par extends
+}

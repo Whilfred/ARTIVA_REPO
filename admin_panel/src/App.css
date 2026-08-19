@@ -1,0 +1,205 @@
+/* admin_panel/src/App.css ou styles/Layout.css */
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+    Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #e9ebee; /* Fond général plus clair */
+  color: #2c3e50; /* Couleur de texte principale */
+}
+
+.admin-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 250px; /* Un peu plus étroit si besoin */
+  background-color: #2d3748; /* Bleu-gris foncé (plus proche de l'exemple) */
+  color: #a0aec0; /* Texte gris clair pour les liens non actifs */
+  padding: 20px 15px; /* Ajustement du padding */
+  display: flex;
+  flex-direction: column;
+  box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 30px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #4a5568; /* Ligne de séparation plus subtile */
+}
+
+.sidebar-logo {
+  width: 40px;
+  height: 40px;
+  margin-right: 12px;
+  background-color: #e53e3e; /* Rouge du shield de l'exemple */
+  border-radius: 8px; /* Bords arrondis pour le shield */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sidebar-logo svg { /* Si tu utilises une icône SVG pour le logo */
+  color: white;
+  width: 24px;
+  height: 24px;
+}
+
+.sidebar-title {
+  font-size: 1.25em; /* 20px */
+  font-weight: 600;
+  color: #f7fafc; /* Texte blanc cassé */
+}
+
+.sidebar-nav ul {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+  flex-grow: 1;
+}
+
+.sidebar-nav li a {
+  display: flex;
+  align-items: center;
+  padding: 10px 15px; /* Padding vertical réduit */
+  margin-bottom: 6px; /* Espacement réduit */
+  color: #a0aec0;
+  text-decoration: none;
+  border-radius: 6px;
+  font-size: 0.9em; /* 14.4px */
+  font-weight: 500;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.sidebar-nav li a:hover {
+  background-color: #4a5568; /* Fond plus foncé au survol */
+  color: #ffffff;
+}
+
+.sidebar-nav li a.active {
+  background-color: #e53e3e; /* Rouge pour l'élément actif */
+  color: #ffffff;
+}
+
+.sidebar-nav .nav-icon {
+  margin-right: 10px;
+  width: 20px;
+  height: 20px;
+  display: inline-flex; /* Pour bien aligner les icônes Lucide */
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: 20px;
+  border-top: 1px solid #4a5568;
+}
+
+.logout-button-sidebar {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 10px 15px;
+  background-color: transparent;
+  color: #a0aec0;
+  border: 1px solid #4a5568; /* Bordure subtile */
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9em;
+  font-weight: 500;
+  text-align: left; /* Aligner le texte à gauche */
+}
+
+.logout-button-sidebar:hover {
+  background-color: #4a5568;
+  color: #ffffff;
+}
+
+.logout-button-sidebar .nav-icon {
+  margin-right: 10px;
+}
+
+.main-content {
+  flex-grow: 1;
+  padding: 25px 30px; /* Plus de padding horizontal */
+  overflow-y: auto;
+  background-color: #ffffff; /* Fond blanc pour la zone de contenu */
+}
+
+/* Styles généraux pour les pages de gestion (ProductManagementPage, etc.) */
+ .management-page { padding: 0; /* Le padding est maintenant sur main-content */ }
+ .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 1px solid #e2e8f0; }
+ .page-header h1 { margin: 0; font-size: 22px; font-weight: 600; color: #2d3748; }
+ .add-btn { padding: 8px 16px; background-color: #e53e3e; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9em; font-weight: 500; display: flex; align-items: center; gap: 6px; }
+ .add-btn:hover { background-color: #c53030; }
+ .back-link { display: inline-block; margin-bottom: 20px; color: #4a5568; text-decoration: none; font-size: 0.9em; }
+ .back-link:hover { text-decoration: underline; }
+ .error-message { color: #c53030; background-color: #fed7d7; border: 1px solid #f56565; padding: 10px; border-radius: 5px; margin-bottom: 15px; font-size: 0.9em; }
+ .loading-indicator { text-align: center; padding: 15px; font-style: italic; color: #718096; }
+
+ /* Styles pour les tableaux */
+ .table-responsive { overflow-x: auto; margin-top: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-radius: 8px; background-color: white;}
+ .custom-table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+ .custom-table th, .custom-table td { border-bottom: 1px solid #e2e8f0; padding: 12px 15px; text-align: left; vertical-align: middle; }
+ .custom-table th { background-color: #f7fafc; font-weight: 600; color: #4a5568; text-transform: uppercase; font-size: 0.8em; letter-spacing: 0.5px; }
+ .product-thumbnail { width: 45px; height: 45px; object-fit: cover; border-radius: 4px; border: 1px solid #e2e8f0; }
+ .actions-cell { text-align: right; white-space: nowrap; } /* Aligner les boutons d'action à droite */
+ .action-btn { padding: 5px 8px; margin-left: 6px; border: 1px solid transparent; border-radius: 4px; cursor: pointer; background: none; }
+ .action-btn:hover { opacity: 0.7; }
+ .edit-btn { color: #3182ce; /* Bleu */ }
+ .delete-btn { color: #c53030; /* Rouge */}
+ .toggle-active-btn { color: #38a169; /* Vert */}
+ .toggle-inactive-btn { color: #dd6b20; /* Orange */}
+ .status-active { color: #38a169; font-weight: 500; background-color: #c6f6d5; padding: 4px 8px; border-radius: 12px; font-size: 0.8em; display: inline-block; }
+ .status-inactive { color: #718096; font-weight: 500; background-color: #e2e8f0; padding: 4px 8px; border-radius: 12px; font-size: 0.8em; display: inline-block; }
+
+ /* Barre de recherche */
+ .search-bar-container { margin-bottom: 20px; margin-top: 10px; }
+ .search-input { width: 100%; box-sizing: border-box; padding: 10px 12px; font-size: 1em; border: 1px solid #cbd5e0; border-radius: 6px; }
+
+ .bottom-nav { display: none; }
+.sidebar-close-btn { display: none; }
+.sidebar-backdrop { display: none; }
+
+@media (max-width: 768px) {
+  .admin-layout { flex-direction: column; }
+
+  .sidebar {
+    position: fixed; top: 0; left: 0; height: 100vh; width: 250px;
+    z-index: 1100; transform: translateX(-100%);
+    transition: transform 0.25s ease;
+  }
+  .sidebar.sidebar-open { transform: translateX(0); }
+
+  .sidebar-header { justify-content: space-between; }
+  .sidebar-close-btn {
+    display: flex; align-items: center; justify-content: center;
+    background: none; border: none; color: #a0aec0; cursor: pointer; margin-left: auto;
+  }
+
+  .sidebar-backdrop {
+    display: block; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5); z-index: 1050;
+  }
+
+  .main-content { padding: 15px; padding-bottom: 80px; }
+
+  .bottom-nav {
+    display: flex; position: fixed; bottom: 0; left: 0; right: 0;
+    background: #2d3748; border-top: 1px solid #4a5568; z-index: 1000; padding: 6px 0;
+  }
+  .bottom-nav-item {
+    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    color: #a0aec0; text-decoration: none; font-size: 0.7em; background: none; border: none; cursor: pointer;
+  }
+  .bottom-nav-item.active { color: #e53e3e; }
+
+  .custom-table, .products-table { font-size: 0.8em; }
+  .page-header { flex-wrap: wrap; gap: 10px; }
+  .filters-container { flex-direction: column; }
+}

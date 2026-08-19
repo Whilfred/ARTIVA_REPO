@@ -1,0 +1,130 @@
+{
+  "welcome": "Welcome to Artiva!",
+  "greeting": "Hello, {{name}}",
+  "common": {
+    "cancel": "Cancel",
+    "save": "Save",
+    "confirm": "Confirm",
+    "edit": "Edit",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "deactivate": "Deactivate",
+    "retry": "Retry",
+    "unavailable": "N/A"
+  },
+  "tabHeaders": {
+    "home": "Home",
+    "shop": "Shop",
+    "wishlist": "Wishlist",
+    "cart": "Cart",
+    "profile": "Profile",
+    "settings": "Settings"
+  },
+  "homePage": {
+    "sections": {
+      "categories": "Categories",
+      "tag_nouveauté": "New Arrivals",
+      "tag_populaire": "Popular",
+      "tag_pourvous": "For You",
+      "tag_meilleuresventes": "Best Sellers",
+      "tag_promotion": "Promotions"
+    }
+  },
+  "shopScreen": {
+    "searchPlaceholder": "Search for products...",
+    "noCategories": "No categories.",
+    "noProducts": "No products in this selection.",
+    "noProductsSearch": "No products match your search.",
+    "selectCategory": "Select a category.",
+    "selectSubCategory": "Select a subcategory."
+  },
+  "settingsScreen": {
+    "title": "My Settings",
+    "editProfile": "Edit Profile",
+    "changePassword": "Change Password",
+    "preferences": "Display Preferences",
+    "language": "Language",
+    "deactivateAccount": "Deactivate my account",
+    "deactivate": {
+      "confirmTitle": "Confirmation",
+      "confirmMessage": "Are you sure you want to delete your account? This action is irreversible.",
+      "successTitle": "Account deleted",
+      "successMessage": "Your account has been successfully deleted. You will be logged out.",
+      "genericError": "An error occurred while deleting the account."
+    }
+  },
+  "productDetail": {
+    "addToCart": "Add to Cart",
+    "unavailable": "Unavailable",
+    "quantity": "Quantity",
+    "stockAvailable": "Stock available: {{count}}",
+    "descriptionTitle": "Product Description",
+    "selectOptions": "Select Options",
+    "category": "Category",
+    "tags": "Tags"
+  },
+  "cartScreen": {
+    "title": "Your Cart",
+    "emptyCart": "Your cart is empty.",
+    "loginToViewCart": "Log in to view your cart.",
+    "subtotal": "Subtotal",
+    "shipping": "Shipping",
+    "toCalculate": "To be calculated",
+    "total": "Total",
+    "checkout": "Checkout",
+    "remove": "Remove",
+    "updateQuantity": "Update Quantity"
+  },
+   "editProfileScreen": {
+        "name": "Full Name",
+        "address": "Address",
+        "phone": "Phone Number",
+        "save": "Save Changes",
+        "nameRequired": "Name is required",
+        "addressInvalid": "Invalid address",
+        "phoneInvalid": "Invalid phone number",
+        "profileUpdated": "Profile updated",
+        "noChanges": "No changes detected"
+    },
+    "changePasswordScreen": {
+        "currentPassword": "Current Password",
+        "newPassword": "New Password",
+        "confirmPassword": "Confirm New Password",
+        "updatePassword": "Update Password",
+        "passwordMismatch": "Passwords do not match",
+        "passwordLength": "Password must be at least 6 characters long",
+        "passwordUpdated": "Password updated",
+        "logout": "You will be logged out for security reasons"
+    },
+      "loginScreen": {
+        "title": "Sign In",
+        "email": "Email Address",
+        "password": "Password",
+        "loginButton": "Sign In",
+        "registerLink": "Don't have an account? Register",
+        "forgotPasswordLink": "Forgot password?"
+    },
+   "WishlistScreen":{
+  "Empty" : "Your wishlist is empty." ,
+   "Tap" : "Tap the ❤️ on products to add them."
+  },
+   "loadingData": "Loading data...",
+    "tagScreen": {
+        "titlePrefix": "Products:",
+        "defaultTitle": "Products by Tag",
+        "missingTag": "Tag name missing.",
+        "fetchError": "Error loading products for tag",
+        "invalidData": "Unexpected product data format.",
+        "fetchGenericError": "Could not load products for this tag.",
+        "noProducts": "No products found for \"{{tag}}\""
+    },
+       "categoryScreen": {
+        "defaultTitle": "Category {{categoryId}}",
+        "missingCategoryId": "Missing category ID.",
+        "fetchError": "Error loading products for category",
+        "invalidData": "Unexpected product data format.",
+        "fetchGenericError": "Could not load products for this category.",
+        "noProducts": "No products found in this category."
+    }
+}
