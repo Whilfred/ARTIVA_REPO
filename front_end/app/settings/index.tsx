@@ -259,6 +259,7 @@ import {
 } from "lucide-react-native"; // Icônes
 import Colors from "../../constants/Colors";
 import { useAuth } from "../../context/AuthContext";
+import { API_BASE_URL } from "../../constants/Api"; // adresse du backend (locale ou prod) — voir ce fichier
 import { useTranslation } from "react-i18next"; // Pour traduire les textes des liens
 import { FontAwesome } from "@expo/vector-icons"; // à importer
 
@@ -296,7 +297,8 @@ const SettingsItem: React.FC<SettingsItemProps> = ({
   );
 };
 
-const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api"; // **METS TON IP**
+// --- PRODUCTION (désactivé en local) : adresse désormais centralisée dans constants/Api.ts ---
+// const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api"; // **METS TON IP**
 
 export default function SettingsMainScreen() {
   const router = useRouter();

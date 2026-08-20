@@ -3,9 +3,11 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
 import ProductFormModal from '../components/ProductFormModal';
+import { API_BASE_URL } from '../config'; // adresse du backend (locale ou prod) — voir ce fichier
 import './ProductManagementPage.css';
 
-const API_BASE_URL = 'https://back-end-purple-log-1280.fly.dev/api';
+// --- PRODUCTION (désactivé en local) : adresse désormais centralisée dans src/config.js ---
+// const API_BASE_URL = 'https://back-end-purple-log-1280.fly.dev/api';
 
 function ProductManagementPage() {
   const [allProducts, setAllProducts] = useState([]);

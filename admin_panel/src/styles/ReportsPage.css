@@ -1,0 +1,274 @@
+/* =============================================================================
+   admin_panel/src/styles/ReportsPage.css
+   =============================================================================
+   Feuille de style manquante : elle était importée par pages/ReportsPage.js
+   mais n'existait pas. Les classes ci-dessous reprennent exactement celles
+   utilisées dans le JSX de la page.
+   ========================================================================== */
+
+.reports-page {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* --- En-tête ------------------------------------------------------------- */
+.reports-page .page-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.reports-page .page-header h1 {
+  margin: 0;
+  font-size: 1.6rem;
+  color: #1f2937;
+}
+
+.reports-page .header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.reports-page .period-selector {
+  display: inline-flex;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.reports-page .period-selector button {
+  border: 0;
+  background: #fff;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #4b5563;
+  transition: background 0.15s, color 0.15s;
+}
+
+.reports-page .period-selector button + button {
+  border-left: 1px solid #d1d5db;
+}
+
+.reports-page .period-selector button:hover {
+  background: #f3f4f6;
+}
+
+.reports-page .period-selector button.active {
+  background: #4f46e5;
+  color: #fff;
+}
+
+.reports-page .export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: #10b981;
+  color: #fff;
+  padding: 9px 16px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.reports-page .export-btn:hover {
+  background: #059669;
+}
+
+.reports-page .back-link {
+  display: inline-block;
+  margin-bottom: 20px;
+  color: #4f46e5;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.reports-page .back-link:hover {
+  text-decoration: underline;
+}
+
+/* --- Indicateurs clés ---------------------------------------------------- */
+.reports-page .kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.reports-page .kpi-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.reports-page .kpi-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  flex-shrink: 0;
+  color: #fff;
+}
+
+.reports-page .kpi-icon.revenue   { background: #10b981; }
+.reports-page .kpi-icon.orders    { background: #4f46e5; }
+.reports-page .kpi-icon.customers { background: #f59e0b; }
+.reports-page .kpi-icon.average   { background: #ec4899; }
+
+.reports-page .kpi-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.reports-page .kpi-label {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.reports-page .kpi-value {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reports-page .kpi-change {
+  font-size: 0.8rem;
+}
+
+.reports-page .kpi-change.positive { color: #059669; }
+.reports-page .kpi-change.negative { color: #dc2626; }
+
+/* --- Graphiques ---------------------------------------------------------- */
+.reports-page .charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.reports-page .chart-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.reports-page .chart-card h3 {
+  margin: 0 0 16px;
+  font-size: 1rem;
+  color: #374151;
+}
+
+.reports-page .customer-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.reports-page .stat-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+
+.reports-page .stat-label { color: #6b7280; font-size: 0.9rem; }
+.reports-page .stat-value { font-size: 1.15rem; font-weight: 700; color: #111827; }
+
+/* --- Commandes récentes -------------------------------------------------- */
+.reports-page .recent-orders {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.reports-page .recent-orders h3 {
+  margin: 0 0 16px;
+  font-size: 1rem;
+  color: #374151;
+}
+
+.reports-page .orders-table {
+  overflow-x: auto;
+}
+
+.reports-page .orders-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.reports-page .orders-table th,
+.reports-page .orders-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid #f3f4f6;
+  white-space: nowrap;
+}
+
+.reports-page .orders-table th {
+  color: #6b7280;
+  font-weight: 600;
+  background: #f9fafb;
+}
+
+.reports-page .status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+}
+
+.reports-page .status-badge.status-completed  { background: #d1fae5; color: #065f46; }
+.reports-page .status-badge.status-pending    { background: #fef3c7; color: #92400e; }
+.reports-page .status-badge.status-processing { background: #dbeafe; color: #1e40af; }
+.reports-page .status-badge.status-cancelled  { background: #fee2e2; color: #991b1b; }
+
+/* --- Chargement ---------------------------------------------------------- */
+.reports-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 320px;
+  color: #6b7280;
+}
+
+.reports-loading .spinner,
+.reports-page .spinner {
+  animation: reports-spin 1s linear infinite;
+}
+
+@keyframes reports-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* --- Écrans étroits ------------------------------------------------------ */
+@media (max-width: 768px) {
+  .reports-page { padding: 16px; }
+  .reports-page .charts-grid { grid-template-columns: 1fr; }
+  .reports-page .page-header { flex-direction: column; align-items: flex-start; }
+}

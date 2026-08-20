@@ -1,6 +1,7 @@
 // admin_panel/src/pages/ProductTagsPage.js
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { API_BASE_URL } from '../config'; // adresse du backend (locale ou prod) — voir ce fichier
 import { Link, useNavigate } from 'react-router-dom'; // useNavigate peut être utile
 import './ProductManagementPage.css'; // Réutiliser certains styles généraux
 
@@ -91,7 +92,8 @@ function ProductTagsPage() {
   const [selectedTag, setSelectedTag] = useState(null); // Pour l'ajout ou la modification
 
   const adminToken = localStorage.getItem('adminToken');
-  const API_BASE_URL = 'https://back-end-purple-log-1280.fly.dev/api'; // Assure-toi que c'est correct
+  // --- PRODUCTION (désactivé en local) : adresse désormais centralisée dans src/config.js ---
+  // const API_BASE_URL = 'https://back-end-purple-log-1280.fly.dev/api'; // Assure-toi que c'est correct
 
   const fetchTags = useCallback(async () => {
     if (!adminToken) {

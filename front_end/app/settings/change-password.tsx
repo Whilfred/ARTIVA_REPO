@@ -17,8 +17,10 @@ import { FontAwesome } from "@expo/vector-icons";
 import Colors from "../../constants/Colors";
 import { useAuth } from "../../context/AuthContext";
 import LoadingArtiva from "../product/LoadingArtiva";
+import { API_BASE_URL } from "../../constants/Api"; // adresse du backend (locale ou prod) — voir ce fichier
 
-const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api";
+// --- PRODUCTION (désactivé en local) : adresse désormais centralisée dans constants/Api.ts ---
+// const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api";
 
 export default function ChangePasswordScreen() {
   const router = useRouter();

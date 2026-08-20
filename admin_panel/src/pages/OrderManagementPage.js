@@ -3,9 +3,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
 import OrderDetailsModal from '../components/OrderDetailsModal';
+import { API_BASE_URL } from '../config'; // adresse du backend (locale ou prod) — voir ce fichier
 import './ProductManagementPage.css'; // On réutilise les styles généraux et de tableau
 
-const API_BASE_URL = 'https://back-end-purple-log-1280.fly.dev/api'; // Déplacé en haut pour la portée globale du module
+// --- PRODUCTION (désactivé en local) : adresse désormais centralisée dans src/config.js ---
+// const API_BASE_URL = 'https://back-end-purple-log-1280.fly.dev/api'; // Déplacé en haut pour la portée globale du module
 
 // Statuts possibles pour le filtre et le changement de statut
 const ORDER_STATUSES = ['pending', 'awaiting_payment', 'paid', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded', 'failed'];

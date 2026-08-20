@@ -15,9 +15,11 @@ import ProductCard, {
 } from "../../components/ProductCartcate";
 import Colors from "../../constants/Colors";
 import { useAuth } from "../../context/AuthContext";
+import { API_BASE_URL } from "../../constants/Api"; // adresse du backend (locale ou prod) — voir ce fichier
 import LoadingArtiva from "../product/LoadingArtiva"; // ✅ AJOUT DE L'IMPORT
 
-const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api";
+// --- PRODUCTION (désactivé en local) : adresse désormais centralisée dans constants/Api.ts ---
+// const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api";
 
 export default function CategoryProductsScreen() {
   const { categoryId, categoryName } = useLocalSearchParams<{

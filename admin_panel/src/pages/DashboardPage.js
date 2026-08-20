@@ -3,13 +3,15 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { TrendingUp, ShoppingBag, Users, Package, UserPlus, Filter, X } from 'lucide-react';
+import { API_BASE_URL } from '../config'; // adresse du backend (locale ou prod) — voir ce fichier
 import {
   ResponsiveContainer, ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   PieChart, Pie, Cell, BarChart
 } from 'recharts';
 import './DashboardPage.css';
 
-const API_BASE_URL = 'https://back-end-purple-log-1280.fly.dev/api';
+// --- PRODUCTION (désactivé en local) : adresse désormais centralisée dans src/config.js ---
+// const API_BASE_URL = 'https://back-end-purple-log-1280.fly.dev/api';
 const ORDER_STATUSES = ['pending', 'awaiting_payment', 'paid', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded', 'failed'];
 const NON_REVENUE_STATUSES = ['cancelled', 'refunded', 'failed'];
 

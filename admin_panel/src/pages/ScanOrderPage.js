@@ -3,12 +3,14 @@ import React, { useState, useCallback } from 'react';
 import QRCodeScanner from '../components/QRCodeScanner';
 import { useNavigate } from 'react-router-dom';
 import { AlertCircle, CheckCircle, Loader2, ScanLine, ShoppingBag, UserCircle, Truck, FileText, CheckSquare, XSquare } from 'lucide-react';
+import { API_BASE_URL } from '../config'; // adresse du backend (locale ou prod) — voir ce fichier
 
 // Configurez votre URL API. Utilisez une variable d'environnement si possible.
 // Si vous utilisez create-react-app, vous pouvez créer un fichier .env à la racine
 // du répertoire admin_panel avec le contenu REACT_APP_API_URL=http://votre_ip:votre_port/api
 // Sinon, remplacez la valeur ci-dessous par l'adresse correcte de votre backend.
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://back-end-purple-log-1280.fly.dev/api'; // Adaptez à votre IP/Port backend
+// --- PRODUCTION (désactivé en local) : adresse désormais centralisée dans src/config.js ---
+// const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://back-end-purple-log-1280.fly.dev/api'; // Adaptez à votre IP/Port backend
 
 const ScanOrderPage = () => {
   const [orderDetails, setOrderDetails] = useState(null);

@@ -2,8 +2,10 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../config'; // adresse du backend (locale ou prod) — voir ce fichier
 
-const API_BASE_URL = 'https://back-end-purple-log-1280.fly.dev/api';
+// --- PRODUCTION (désactivé en local) : adresse désormais centralisée dans src/config.js ---
+// const API_BASE_URL = 'https://back-end-purple-log-1280.fly.dev/api';
 
 function LoginPage() {
   const [email, setEmail] = useState('');
@@ -25,7 +27,12 @@ function LoginPage() {
 
       const { token, admin } = response.data; // <-- Ici, on récupère "admin"
 
-      if (admin && admin.role === 'admin') { // Vérifier si c'est bien un admin
+      // Le backend reconnaît DEUX rôles administrateurs : 'admin' et
+      // 'super_admin' (voir back_end/middlewares/adminMiddleware.js, qui accepte
+      // explicitement les deux). Ce test ne comparait qu'à 'admin' : un compte
+      // super_admin était donc refusé ici alors que l'API lui aurait tout
+      // autorisé — le rôle le plus élevé était le seul à ne pas pouvoir entrer.
+      if (admin && ['admin', 'super_admin'].includes(admin.role)) {
         localStorage.setItem('adminToken', token); 
         localStorage.setItem('adminUser', JSON.stringify(admin)); 
         console.log('Connexion Admin réussie:', admin);

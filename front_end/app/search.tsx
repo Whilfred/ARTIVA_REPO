@@ -16,8 +16,10 @@ import Colors from "../constants/Colors";
 import { useAuth } from "../context/AuthContext";
 import { useTranslation } from "react-i18next";
 import LoadingArtiva from './product/LoadingArtiva';
+import { API_BASE_URL } from "../constants/Api"; // adresse du backend (locale ou prod) — voir ce fichier
 
-const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api";
+// --- PRODUCTION (désactivé en local) : adresse désormais centralisée dans constants/Api.ts ---
+// const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api";
 
 // --- Normalisation pour un matching tolérant ---
 const normalize = (str: string): string =>

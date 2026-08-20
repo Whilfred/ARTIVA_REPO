@@ -11,9 +11,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Product as BaseProductType } from "../components/ProductCard"; // Type de base produit
 import { useAuth } from "./AuthContext"; // Pour le token utilisateur
 import { Alert } from "react-native";
+import { API_BASE_URL } from "../constants/Api"; // adresse du backend (locale ou prod) — voir ce fichier
 
 // L'URL de base de ton API (assure-toi qu'elle est correcte)
-const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api"; // **METS TON IP ICI**
+// --- PRODUCTION (désactivé en local) : adresse désormais centralisée dans constants/Api.ts ---
+// const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api"; // **METS TON IP ICI**
 
 // Un item de la wishlist est essentiellement un produit
 export interface WishlistItem extends BaseProductType {}

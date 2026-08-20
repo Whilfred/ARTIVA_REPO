@@ -5,6 +5,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityInd
 import { Stack, useRouter } from 'expo-router';
 import LoadingArtiva from './product/LoadingArtiva';
 import { useAuth } from '../context/AuthContext';
+import { API_BASE_URL } from "../constants/Api"; // adresse du backend (locale ou prod) — voir ce fichier
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
@@ -34,7 +35,7 @@ export default function ForgotPasswordScreen() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('https://back-end-purple-log-1280.fly.dev/api/auth/forgot-password', {
+      const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
@@ -64,7 +65,7 @@ export default function ForgotPasswordScreen() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('https://back-end-purple-log-1280.fly.dev/api/auth/reset-password', {
+      const response = await fetch(`${API_BASE_URL}/auth/reset-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, code, newPassword }),

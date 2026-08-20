@@ -328,6 +328,7 @@ import { Stack, useRouter } from "expo-router";
 import { FontAwesome } from "@expo/vector-icons";
 import Colors from "../../constants/Colors";
 import { useAuth, User } from "../../context/AuthContext";
+import { API_BASE_URL } from "../../constants/Api"; // adresse du backend (locale ou prod) — voir ce fichier
 
 interface ProfileFormData {
   name: string;
@@ -335,7 +336,8 @@ interface ProfileFormData {
   phone: string;
 }
 
-const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api";
+// --- PRODUCTION (désactivé en local) : adresse désormais centralisée dans constants/Api.ts ---
+// const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api";
 
 export default function EditProfileScreen() {
   const { user, userToken, updateUserInContext, effectiveAppColorScheme } =
