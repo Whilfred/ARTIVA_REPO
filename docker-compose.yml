@@ -1,0 +1,93 @@
+# =============================================================================
+# ARTIVA — Environnement de DÉVELOPPEMENT LOCAL
+# =============================================================================
+# Lance uniquement la base de données (+ un explorateur web).
+# Le backend, l'app mobile et le panel admin se lancent à la main (npm run dev).
+#
+#   docker compose up -d        -> démarre PostgreSQL + Adminer
+#   docker compose down         -> arrête (les données sont conservées)
+#   docker compose down -v      -> arrête ET efface la base (re-seed au prochain up)
+#   docker compose logs -f db   -> logs de la base
+# =============================================================================
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: artiva_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: artiva
+      POSTGRES_PASSWORD: artiva
+      POSTGRES_DB: artiva
+      # Le conteneur travaille en UTC, comme la base de prod.
+      TZ: UTC
+      PGTZ: UTC
+    ports:
+      # 5433 côté hôte pour ne pas entrer en conflit avec un PostgreSQL
+      # déjà installé sur la machine (qui écoute lui sur 5432).
+      - "5433:5432"
+    volumes:
+      - artiva_pgdata:/var/lib/postgresql/data
+      # ---------------------------------------------------------------------
+      # Scripts d'initialisation : exécutés UNE SEULE FOIS, à la création du
+      # volume, dans l'ordre alphabétique du nom de fichier.
+      # ---------------------------------------------------------------------
+      # 01 - la fonction trigger update_updated_at_column(), qui doit exister
+      #      AVANT le schéma (artiva.sql l'utilise dès sa ligne 45).
+      - ./db/init/01_functions.sql:/docker-entrypoint-initdb.d/01_functions.sql:ro
+      # 02 - le schéma officiel du projet, monté tel quel depuis la racine.
+      - ./artiva.sql:/docker-entrypoint-initdb.d/02_schema.sql:ro
+      # 03 - les tables utilisées par le code mais absentes d'artiva.sql.
+      - ./db/init/03_tables_manquantes.sql:/docker-entrypoint-initdb.d/03_tables_manquantes.sql:ro
+      # 04 - jeu de données de démonstration (admin, client, produits...).
+      - ./db/init/04_seed.sql:/docker-entrypoint-initdb.d/04_seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U artiva -d artiva"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  # ---------------------------------------------------------------------------
+  # Mailpit — boîte mail de développement
+  # ---------------------------------------------------------------------------
+  # Faux serveur SMTP : il accepte tous les emails que le backend envoie et ne
+  # les transmet à personne. On les consulte dans une interface web, avec le
+  # rendu HTML exact que recevrait le client (codes de connexion à 6 chiffres,
+  # réinitialisation de mot de passe, confirmations de commande).
+  #
+  #   Interface web : http://localhost:8025
+  #   SMTP          : localhost:1025 (sans authentification)
+  #
+  # Aucun email ne peut partir vers l'extérieur : c'est le garde-fou qui évite
+  # d'écrire à de vrais clients pendant les tests.
+  # ---------------------------------------------------------------------------
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: artiva_mailpit
+    restart: unless-stopped
+    ports:
+      - "1025:1025"   # SMTP  — c'est ici que le backend dépose les emails
+      - "8025:8025"   # Web   — c'est ici qu'on les lit
+    environment:
+      MP_MAX_MESSAGES: 500          # au-delà, les plus anciens sont supprimés
+      MP_SMTP_AUTH_ACCEPT_ANY: 1    # accepte n'importe quels identifiants
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+
+  # Explorateur de base de données dans le navigateur : http://localhost:8090
+  # (8090 et non 8081 : ce dernier est le port par défaut de Metro/Expo)
+  # Système: PostgreSQL | Serveur: db | Utilisateur: artiva | Mot de passe: artiva | Base: artiva
+  adminer:
+    image: adminer:latest
+    container_name: artiva_adminer
+    restart: unless-stopped
+    ports:
+      - "8090:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: db
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  artiva_pgdata:
+    name: artiva_pgdata

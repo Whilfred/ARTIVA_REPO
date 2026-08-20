@@ -1,31 +1,128 @@
 // back_end/utils/sendEmail.js
-import nodemailer from "nodemailer";
+//
+// NOTE : ce fichier était écrit en syntaxe ESM (import / export) alors que tout
+// le reste du backend est en CommonJS (require) et que package.json ne déclare
+// pas "type": "module". Ça ne fonctionne que sur Node >= 22 (l'image Docker de
+// prod utilise Node 24) ; sur Node 20 le serveur refuse de démarrer avec
+// « Cannot use import statement outside a module ». Converti en CommonJS, ce qui
+// fonctionne sur les deux.
+const nodemailer = require("nodemailer");
 
-// ==============================
-// Vérification des variables Brevo
-console.log("BREVO_SMTP_USER =", process.env.BREVO_SMTP_USER);
-console.log(
-  "BREVO_SMTP_PASS =",
-  process.env.BREVO_SMTP_PASS ? "OK" : "MANQUANT"
+// =============================================================================
+// Choix du mode d'envoi — piloté par MAIL_TRANSPORT dans back_end/.env
+// =============================================================================
+// mailpit  -> DÉVELOPPEMENT (recommandé) : les emails partent vers le faux
+//             serveur SMTP Mailpit lancé par docker compose. Rien ne sort de la
+//             machine ; on lit les messages, avec leur rendu HTML, sur
+//             http://localhost:8025.
+//
+// console  -> DÉVELOPPEMENT sans Docker : rien n'est envoyé, le contenu de
+//             l'email (donc le code à 6 chiffres) est écrit dans le terminal.
+//
+// brevo    -> PRODUCTION : envoi réel via le relais SMTP Brevo.
+//
+// Par sécurité, si le mode demandé est "brevo" mais que les identifiants ne sont
+// pas renseignés, on retombe sur "console" : sans ce garde-fou, toute connexion
+// client échouerait avec une erreur 500.
+// =============================================================================
+const hasBrevoCredentials = Boolean(
+  process.env.BREVO_SMTP_USER && process.env.BREVO_SMTP_PASS
 );
 
+let MAIL_TRANSPORT = (process.env.MAIL_TRANSPORT || "mailpit").toLowerCase();
+
+// "smtp" est accepté comme ancien alias de "brevo" (valeur utilisée avant
+// l'introduction de Mailpit).
+if (MAIL_TRANSPORT === "smtp") MAIL_TRANSPORT = "brevo";
+
+if (MAIL_TRANSPORT === "brevo" && !hasBrevoCredentials) {
+  console.warn(
+    "[MAIL] MAIL_TRANSPORT=brevo mais BREVO_SMTP_USER / BREVO_SMTP_PASS sont " +
+      "absents : repli sur le mode console."
+  );
+  MAIL_TRANSPORT = "console";
+}
+
+const USE_CONSOLE_TRANSPORT = MAIL_TRANSPORT === "console";
+
 // ==============================
-// Transporteur SMTP Brevo (PRODUCTION)
-const transporter = nodemailer.createTransport({
-  host: "smtp-relay.brevo.com",
-  port: 587,
-  secure: false, // STARTTLS
-  auth: {
-    user: process.env.BREVO_SMTP_USER,
-    pass: process.env.BREVO_SMTP_PASS,
-  },
-});
+// Construction du transporteur
+let transporter = null;
+
+if (MAIL_TRANSPORT === "mailpit") {
+  // Mailpit n'exige ni chiffrement ni authentification. MAIL_HOST permet de le
+  // joindre ailleurs que sur cette machine (voir back_end/.env).
+  const host = process.env.MAIL_HOST || "localhost";
+  const port = parseInt(process.env.MAIL_PORT || "1025", 10);
+
+  transporter = nodemailer.createTransport({
+    host,
+    port,
+    secure: false,
+    ignoreTLS: true, // Mailpit ne propose pas STARTTLS
+  });
+
+  console.log(
+    `[MAIL] Mode MAILPIT : emails capturés sur ${host}:${port}.\n` +
+      `       Boîte de réception : http://${host === "localhost" ? "localhost" : host}:8025`
+  );
+} else if (MAIL_TRANSPORT === "brevo") {
+  // --- PRODUCTION -----------------------------------------------------------
+  transporter = nodemailer.createTransport({
+    host: "smtp-relay.brevo.com",
+    port: 587,
+    secure: false, // STARTTLS
+    auth: {
+      user: process.env.BREVO_SMTP_USER,
+      pass: process.env.BREVO_SMTP_PASS,
+    },
+  });
+
+  console.log("[MAIL] Mode BREVO : les emails seront réellement envoyés.");
+} else {
+  console.log(
+    "[MAIL] Mode CONSOLE : aucun email ne sera réellement envoyé.\n" +
+      "       Les codes de connexion s'afficheront ici même, dans ce terminal."
+  );
+}
+
+// ==============================
+// Rend le corps HTML lisible dans un terminal (pour le mode console)
+const htmlToText = (html = "") =>
+  html
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
 // ==============================
 // Fonction utilitaire d'envoi avec logs
 const sendMailWithLog = async (mailOptions, label) => {
+  // --- DÉVELOPPEMENT : on affiche l'email au lieu de l'envoyer ---------------
+  if (USE_CONSOLE_TRANSPORT) {
+    console.log("\n" + "=".repeat(70));
+    console.log(`[${label}] EMAIL (non envoyé — mode console)`);
+    console.log(`  À       : ${mailOptions.to}`);
+    console.log(`  Objet   : ${mailOptions.subject}`);
+    console.log(`  Contenu : ${htmlToText(mailOptions.html)}`);
+    console.log("=".repeat(70) + "\n");
+    return;
+  }
+
+  // --- Envoi via SMTP : Mailpit en local, Brevo en production ---------------
   try {
     const info = await transporter.sendMail(mailOptions);
+
+    if (MAIL_TRANSPORT === "mailpit") {
+      // En développement, l'info utile n'est pas l'accusé SMTP mais où lire
+      // le message.
+      console.log(
+        `[${label}] Email capturé par Mailpit pour ${mailOptions.to} ` +
+          `— à lire sur http://localhost:8025`
+      );
+      return;
+    }
+
     console.log(`[${label}] Email envoyé à ${mailOptions.to}`);
     console.log(`[${label}] Réponse Nodemailer :`, {
       messageId: info.messageId,
@@ -42,7 +139,7 @@ const sendMailWithLog = async (mailOptions, label) => {
 
 // ==============================
 // Envoi du code de connexion (2FA)
-export const sendLoginCode = async (to, code) => {
+const sendLoginCode = async (to, code) => {
   const htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width:500px; margin:auto; padding:20px; border:1px solid #e0e0e0; border-radius:10px; background:#f9f9f9; text-align:center;">
       <h2 style="color:#4CAF50;">Connexion à Artiva</h2>
@@ -66,7 +163,7 @@ export const sendLoginCode = async (to, code) => {
 
 // ==============================
 // Envoi du code de réinitialisation de mot de passe
-export const sendResetPasswordCode = async (to, code) => {
+const sendResetPasswordCode = async (to, code) => {
   const htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width:500px; margin:auto; padding:20px; border:1px solid #e0e0e0; border-radius:10px; background:#fdfdfd; text-align:center;">
       <h2 style="color:#FF9800;">Réinitialisation de mot de passe</h2>
@@ -90,7 +187,7 @@ export const sendResetPasswordCode = async (to, code) => {
 
 // ==============================
 // Envoi d'une nouvelle commande : client + admin
-export const sendNewOrderEmails = async (userEmail, adminEmail, orderData) => {
+const sendNewOrderEmails = async (userEmail, adminEmail, orderData) => {
   const customerName = orderData.shipping_address?.name || "Cher client";
 
   const generateItemsTable = (items) => {
@@ -161,4 +258,13 @@ export const sendNewOrderEmails = async (userEmail, adminEmail, orderData) => {
     },
     "Order-Admin"
   );
+};
+
+// =============================================================================
+// Exports (CommonJS — voir la note en haut de fichier)
+// =============================================================================
+module.exports = {
+  sendLoginCode,
+  sendResetPasswordCode,
+  sendNewOrderEmails,
 };

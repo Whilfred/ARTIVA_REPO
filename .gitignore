@@ -24,3 +24,8 @@ local.properties
 # Android signing keys
 *.jks
 *.keystore
+# Fichier de secrets mal nommé à la racine (« env » au lieu de « .env ») : il
+# contient les identifiants de la base de production et les clés SMTP, et la
+# règle « .env » ci-dessus ne le couvre pas. Ignoré pour éviter tout commit
+# accidentel. À déplacer hors du dépôt.
+/env

@@ -395,7 +395,11 @@ CREATE INDEX IF NOT EXISTS idx_order_items_product_id ON order_items(product_id)
 
 CREATE INDEX IF NOT EXISTS idx_payments_transaction_id ON payments(transaction_id);
 
-CREATE INDEX IF NOT EXISTS idx_address_user_id ON address(user_id);
+-- DÉSACTIVÉ : la table `address` n'est créée nulle part (ni ici, ni dans le code
+-- backend, qui n'y fait aucune référence — les adresses de commande sont
+-- stockées en JSONB dans orders.shipping_address). Cette ligne faisait échouer
+-- l'exécution du fichier sur une base vierge.
+-- CREATE INDEX IF NOT EXISTS idx_address_user_id ON address(user_id);
 
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_type ON notifications(type);

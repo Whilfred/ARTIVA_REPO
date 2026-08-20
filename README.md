@@ -102,36 +102,30 @@
     *   Bouton "Imprimer Facture" (placeholder).
 *   **Rapports & Finance :** Page placeholder.
 
-## Installation et Lancement (Instructions de base)
+## Installation et Lancement
 
-### Prérequis
-*   Node.js (v18+ recommandé)
-*   npm ou yarn
-*   PostgreSQL
-*   Expo CLI (pour le frontend mobile)
-*   Un navigateur web (pour le panel admin)
-*   Un appareil mobile ou émulateur (pour l'application Expo)
+> **Pour démarrer le projet en local, suis [LANCEMENT_LOCAL.md](LANCEMENT_LOCAL.md).**
+> Ce guide couvre la base de données Docker, les comptes de test, les données de
+> démonstration et le dépannage.
 
-### Backend
-1.  Naviguer vers le dossier `back_end`.
-2.  Installer les dépendances : `npm install`
-3.  Créer un fichier `.env` basé sur `.env.example` (si fourni) et configurer les variables (BDD, JWT_SECRET).
-4.  S'assurer que PostgreSQL est lancé et que la base de données et les tables sont créées (exécuter les scripts SQL fournis).
-5.  Lancer le serveur : `npm run dev` (tournera sur `http://192.168.11.103:3001` par défaut).
+En résumé :
 
-### Frontend Mobile (Expo)
-1.  Naviguer vers le dossier `front_end`.
-2.  Installer les dépendances : `npm install` (ou `yarn install`)
-3.  Mettre à jour la variable `API_BASE_URL` dans les fichiers concernés (ex: `index.tsx`, `ShopScreen.tsx`, `product/[id].tsx`, `context/CartContext.tsx`, `context/WishlistContext.tsx`) avec votre adresse IP locale si vous testez sur un appareil physique.
-4.  Lancer le serveur de développement : `npx expo start`
-5.  Scanner le QR code avec l'application Expo Go sur votre appareil mobile.
+```bash
+docker compose up -d                      # PostgreSQL (5433) + Mailpit (8025) + Adminer (8090)
+cd back_end     && npm install && npm run dev   # API         -> http://localhost:3001
+cd admin_panel  && npm install && npm start     # Panel admin -> http://localhost:3000
+cd front_end    && npm install && npx expo start # App mobile -> QR code Expo Go
+```
 
-### Panel Admin (Web React)
-1.  Naviguer vers le dossier `admin_panel`.
-2.  Installer les dépendances : `npm install`
-3.  Mettre à jour la variable `API_BASE_URL` dans les fichiers de page (ex: `LoginPage.js`, `ProductManagementPage.js`, etc.).
-4.  Lancer le serveur de développement : `npm start` (tournera sur `http://192.168.11.103:3001` par défaut).
-5.  Ouvrir un navigateur à cette adresse.
+Prérequis : Node.js 18+, npm, Docker (avec le plugin `compose`), et l'app
+Expo Go sur un téléphone (ou un émulateur Android).
+
+Comptes de démonstration : `admin@artiva.local` / `admin123` pour le panel,
+`client@artiva.local` / `client123` pour l'app mobile.
+
+En local, aucun email ne part vers l'extérieur : ils sont tous capturés par
+**Mailpit**, consultable sur **http://localhost:8025**. C'est là qu'on récupère
+le code à 6 chiffres demandé à la connexion client.
 
 ## Prochaines Étapes Prévues (non exhaustif)
 *   Finalisation de l'UI/UX pour l'application mobile et le panel admin.
