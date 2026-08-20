@@ -19,15 +19,18 @@ import {
 import { useRouter, Link } from "expo-router";
 import { FontAwesome, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import Colors from "../constants/Colors";
+import { normalizeColorScheme } from "../constants/ColorScheme";
 import { useAuth } from "../context/AuthContext";
 import LoadingArtiva from "./product/LoadingArtiva";
+import { API_BASE_URL } from "../constants/Api"; // adresse du backend (locale ou prod) — voir ce fichier
 
-const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api";
+// --- PRODUCTION (désactivé en local) : adresse désormais centralisée dans constants/Api.ts ---
+// const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api";
 const { width } = Dimensions.get("window");
 
 export default function LoginScreen() {
   const router = useRouter();
-  const colorScheme = useColorScheme() ?? "light";
+  const colorScheme = normalizeColorScheme(useColorScheme());
   const colors = Colors[colorScheme];
   const { signInWithGoogle, userToken, isGoogleSigningIn, isLoading: isAuthLoading, effectiveAppColorScheme } = useAuth();
 
@@ -304,11 +307,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     marginTop: 12,
     gap: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.2)',
   },
   loginButtonText: {
     color: "#fff",

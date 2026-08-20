@@ -180,10 +180,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: 'hidden',
     elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 1,
+    boxShadow: '0px 1px 1px rgba(0, 0, 0, 0.05)',
   },
   optionItem: { // Renommé de languageOption
     flexDirection: 'row',

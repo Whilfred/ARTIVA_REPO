@@ -70,7 +70,7 @@ const CartListItem: React.FC<CartListItemProps> = React.memo(({
 
 // Styles pour CartListItem (copie ceux de CartScreen pour itemContainer, etc.)
 const styles = StyleSheet.create({
-  itemContainer: { flexDirection: 'row', padding: 10, marginBottom: 10, borderRadius: 8, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 1, },
+  itemContainer: { flexDirection: 'row', padding: 10, marginBottom: 10, borderRadius: 8, boxShadow: '0px 1px 1px rgba(0, 0, 0, 0.05)', },
   itemImage: { width: 80, height: 80, borderRadius: 6, marginRight: 12, backgroundColor: '#e0e0e0' },
   itemDetails: { flex: 1, justifyContent: 'center' },
   itemName: { fontSize: 16, fontWeight: '600', marginBottom: 5 },

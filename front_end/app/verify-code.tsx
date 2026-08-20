@@ -19,8 +19,11 @@ import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
 import Colors from "../constants/Colors";
+import { normalizeColorScheme } from "../constants/ColorScheme";
+import { API_BASE_URL } from "../constants/Api"; // adresse du backend (locale ou prod) — voir ce fichier
 
-const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api";
+// --- PRODUCTION (désactivé en local) : adresse désormais centralisée dans constants/Api.ts ---
+// const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api";
 
 export default function VerifyCode() {
   const { signIn } = useAuth();
@@ -28,7 +31,7 @@ export default function VerifyCode() {
   const params = useLocalSearchParams();
   const email = typeof params.email === "string" ? params.email : "";
 
-  const colorScheme = useColorScheme() ?? "light";
+  const colorScheme = normalizeColorScheme(useColorScheme());
   const colors = Colors[colorScheme];
 
   const [code, setCode] = useState("");
@@ -247,11 +250,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 8,
     marginTop: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.2)',
   },
   buttonText: {
     color: "#fff",

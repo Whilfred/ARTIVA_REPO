@@ -760,6 +760,7 @@ import { useAuth } from "../../context/AuthContext";
 import Colors from "../../constants/Colors"; // Ton fichier de couleurs
 import { FontAwesome } from "@expo/vector-icons";
 import { FontAwesome5, MaterialIcons, Entypo } from "@expo/vector-icons";
+import { API_BASE_URL } from "../../constants/Api"; // adresse du backend (locale ou prod) — voir ce fichier
 
 // (Les interfaces Order, OrderItem, UserDetails, etc. restent les mêmes)
 interface UserDetails {
@@ -829,7 +830,8 @@ const menuItemsBaseConfig: {
   },
 ];
 
-const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api";
+// --- PRODUCTION (désactivé en local) : adresse désormais centralisée dans constants/Api.ts ---
+// const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api";
 
 export default function TabProfileScreen() {
   const {
@@ -1330,10 +1332,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     overflow: "hidden",
     elevation: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 1,
+    boxShadow: '0px 1px 1px rgba(0, 0, 0, 0.05)',
   },
   menuItem: {
     flexDirection: "row",
@@ -1398,10 +1397,7 @@ const styles = StyleSheet.create({
     width: "100%",
     maxHeight: "75%",
     elevation: 5,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    boxShadow: '0px -2px 4px rgba(0, 0, 0, 0.1)',
   },
   modalTitle: {
     fontWeight: "bold",

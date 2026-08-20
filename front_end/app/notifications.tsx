@@ -17,8 +17,10 @@ import { FontAwesome, Ionicons } from "@expo/vector-icons";
 import Colors from "../constants/Colors";
 import { useAuth } from "../context/AuthContext";
 import LoadingArtiva from "./product/LoadingArtiva";
+import { API_BASE_URL } from "../constants/Api"; // adresse du backend (locale ou prod) — voir ce fichier
 
-const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api";
+// --- PRODUCTION (désactivé en local) : adresse désormais centralisée dans constants/Api.ts ---
+// const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api";
 
 interface NotificationItem {
   id: string | number;
@@ -525,10 +527,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderRadius: 8,
     elevation: 1.5,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
+    boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.08)',
     borderWidth: 1,
     borderColor: "transparent",
   },

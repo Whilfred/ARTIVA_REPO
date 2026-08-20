@@ -14,8 +14,10 @@ import { Stack, useLocalSearchParams, useRouter, Href } from "expo-router";
 import Colors from "../../constants/Colors";
 import { useAuth } from "../../context/AuthContext";
 import LoadingArtiva from "../product/LoadingArtiva";
+import { API_BASE_URL } from "../../constants/Api"; // adresse du backend (locale ou prod) — voir ce fichier
 
-const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api";
+// --- PRODUCTION (désactivé en local) : adresse désormais centralisée dans constants/Api.ts ---
+// const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api";
 
 interface OrderItem {
   itemId: number | string;
@@ -380,10 +382,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     elevation: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.1)',
   },
   sectionTitle: {
     fontSize: 18,

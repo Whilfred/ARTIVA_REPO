@@ -8,9 +8,11 @@ import React, {
   ReactNode,
   useCallback,
 } from "react";
-import * as SecureStore from "expo-secure-store";
+import * as SecureStore from "../constants/SecureStorage"; // SecureStore sur mobile, localStorage sur web — voir ce fichier
 import { Appearance, Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { API_BASE_URL } from "../constants/Api"; // adresse du backend (locale ou prod) — voir ce fichier
+import { normalizeColorScheme } from "../constants/ColorScheme";
 // import { GoogleSignin } from '@react-native-google-signin/google-signin'; // COMMENTÉ
 // import { googleConfig } from '../constants/GoogleAuthConfig'; // COMMENTÉ
 
@@ -18,7 +20,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 const TOKEN_KEY = "artiva-auth-token";
 const USER_INFO_KEY = "artiva-user-info";
 const THEME_PREFERENCE_KEY = "artiva-theme-preference";
-const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api";
+// --- PRODUCTION (désactivé en local) : adresse désormais centralisée dans constants/Api.ts ---
+// const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api";
 
 // --- Types ---
 export interface User {
@@ -73,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     useState<AppColorSchemePreference>("system");
   const [effectiveAppColorScheme, setEffectiveAppColorScheme] = useState<
     "light" | "dark"
-  >(Appearance.getColorScheme() ?? "light");
+  >(normalizeColorScheme(Appearance.getColorScheme()));
   const [isThemePreferenceLoading, setIsThemePreferenceLoading] = useState(true);
 
   // ===== INITIALISATION GOOGLE SIGN-IN ===== COMMENTÉ
@@ -119,7 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const handleSystemThemeChange = (preferences: Appearance.AppearancePreferences) => {
       setAppColorSchemePreferenceState((currentStoredPref) => {
         if (currentStoredPref === "system") {
-          const newSystemScheme = preferences.colorScheme ?? "light";
+          const newSystemScheme = normalizeColorScheme(preferences.colorScheme);
           setEffectiveAppColorScheme(newSystemScheme);
         }
         return currentStoredPref;
@@ -134,7 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAppColorSchemePreferenceState(initialPreference);
 
         if (initialPreference === "system") {
-          const systemTheme = Appearance.getColorScheme() ?? "light";
+          const systemTheme = normalizeColorScheme(Appearance.getColorScheme());
           setEffectiveAppColorScheme(systemTheme);
           appearanceListenerSubscription = Appearance.addChangeListener(handleSystemThemeChange);
         } else {
@@ -143,7 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (e) {
         console.error("AuthContext: Erreur chargement préférence thème", e);
         setAppColorSchemePreferenceState("system");
-        setEffectiveAppColorScheme(Appearance.getColorScheme() ?? "light");
+        setEffectiveAppColorScheme(normalizeColorScheme(Appearance.getColorScheme()));
       } finally {
         setIsThemePreferenceLoading(false);
       }
@@ -301,7 +304,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await AsyncStorage.setItem(THEME_PREFERENCE_KEY, scheme);
       setAppColorSchemePreferenceState(scheme);
       if (scheme === "system") {
-        setEffectiveAppColorScheme(Appearance.getColorScheme() ?? "light");
+        setEffectiveAppColorScheme(normalizeColorScheme(Appearance.getColorScheme()));
       } else {
         setEffectiveAppColorScheme(scheme);
       }

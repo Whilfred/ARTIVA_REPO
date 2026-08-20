@@ -19,6 +19,7 @@ import Colors from "../../constants/Colors";
 import { Product as BaseProductType } from "../../components/ProductCard";
 import { useAuth } from "../../context/AuthContext";
 import LoadingArtiva from "../product/LoadingArtiva";
+import { API_BASE_URL } from "../../constants/Api"; // adresse du backend (locale ou prod) — voir ce fichier
 
 interface Category {
   id: string | number;
@@ -30,7 +31,8 @@ interface Category {
 
 interface ShopProduct extends BaseProductType {}
 
-const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api";
+// --- PRODUCTION (désactivé en local) : adresse désormais centralisée dans constants/Api.ts ---
+// const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api";
 
 export default function TabShopScreen() {
   const router = useRouter();
@@ -211,7 +213,7 @@ export default function TabShopScreen() {
               ]}
               onPress={() => handleSelectSubCategory(item.id)}
             >
-              {item.image_url && <Image source={{ uri: item.image_url }} style={styles.subCategoryImage} />}
+              {item.image_url && <Image source={{ uri: item.image_url }} style={styles.subCategoryImage} resizeMode="contain" />}
               <Text style={[
                 styles.subCategoryText, 
                 { color: colors.text },
@@ -300,7 +302,7 @@ const styles = StyleSheet.create({
   subCategoryItemSelected: { backgroundColor: "#fffafa" },
   subCategoryTextSelected: { color: "#FF8C00" },
 
-  subCategoryImage: { width: 35, height: 35, borderRadius: 4, resizeMode: "contain" },
+  subCategoryImage: { width: 35, height: 35, borderRadius: 4 },
   productList: { paddingHorizontal: 5 },
   productItem: { flex: 0.5, margin: 4, padding: 8, borderRadius: 8, borderWidth: 0.5 },
   productImage: { width: "100%", aspectRatio: 1, borderRadius: 6, marginBottom: 8, backgroundColor: "#f0f0f09a" },

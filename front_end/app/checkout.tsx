@@ -10,20 +10,29 @@ import {
   ActivityIndicator,
   Image,
   Alert,
+  Platform,
 } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { FontAwesome } from "@expo/vector-icons";
 import QRCode from "react-native-qrcode-svg";
-import ViewShot from "react-native-view-shot";
-import * as MediaLibrary from "expo-media-library";
+import ViewShot, { type ViewShotRef } from "react-native-view-shot";
+// expo-media-library n'est PAS importe ici volontairement.
+//
+// Depuis le SDK 57, ce module s'appuie sur le module natif
+// "ExpoMediaLibraryNext", qui n'a pas d'implementation web : un import en tete
+// de fichier fait planter tout l'ecran de commande dans un navigateur, avant
+// meme qu'il s'affiche. Il est donc charge a la demande, dans
+// handleDownloadQrCode, et uniquement sur mobile.
 import { Picker } from "@react-native-picker/picker";
 
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import Colors from "../constants/Colors";
 import LoadingArtiva from "./product/LoadingArtiva";
+import { API_BASE_URL } from "../constants/Api"; // adresse du backend (locale ou prod) — voir ce fichier
 
-const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api";
+// --- PRODUCTION (désactivé en local) : adresse désormais centralisée dans constants/Api.ts ---
+// const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api";
 
 // ============================================================
 // TARIFS DE LIVRAISON
@@ -116,7 +125,7 @@ export default function CheckoutScreen() {
   const router = useRouter();
   const { user, userToken, isLoading: isAuthLoading, effectiveAppColorScheme } = useAuth();
   const { cartItems, getTotalPrice, clearCart } = useCart();
-  const qrCodeRef = useRef<ViewShot>(null);
+  const qrCodeRef = useRef<ViewShotRef>(null);
 
   const currentScheme = effectiveAppColorScheme ?? "light";
   const colors = {
@@ -280,7 +289,15 @@ const handleSubmitOrder = async () => {
 };
 
   const handleDownloadQrCode = async () => {
+    if (Platform.OS === "web") {
+      Alert.alert(
+        "Non disponible",
+        "L'enregistrement dans la galerie n'existe que sur l'application mobile. Faites une capture d'ecran pour conserver ce QR Code."
+      );
+      return;
+    }
     try {
+      const MediaLibrary = await import("expo-media-library");
       const permission = await MediaLibrary.requestPermissionsAsync(true);
       if (permission.status !== "granted") {
         Alert.alert("Permission refusée", "Autorisez l'accès aux photos pour sauvegarder le QR Code.");
@@ -290,7 +307,7 @@ const handleSubmitOrder = async () => {
         Alert.alert("Erreur", "QR Code introuvable.");
         return;
       }
-      const uri = await (qrCodeRef.current as any).capture();
+      const uri = await qrCodeRef.current.capture();
       if (!uri) throw new Error("Capture du QR Code échouée");
       const asset = await MediaLibrary.createAssetAsync(uri);
       await MediaLibrary.createAlbumAsync("Commandes Artiva", asset, false);

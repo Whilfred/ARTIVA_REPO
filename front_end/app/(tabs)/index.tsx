@@ -28,8 +28,10 @@ import Colors from "../../constants/Colors";
 import { useRouter, Href, Stack } from "expo-router";
 import { useAuth } from "../../context/AuthContext";
 import { Feather, Ionicons } from "@expo/vector-icons";
+import { API_BASE_URL } from "../../constants/Api"; // adresse du backend (locale ou prod) — voir ce fichier
 
-const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api";
+// --- PRODUCTION (désactivé en local) : adresse désormais centralisée dans constants/Api.ts ---
+// const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api";
 const { width } = Dimensions.get("window");
 
 // --- Largeur des ProductCard dans les carrousels horizontaux de l'accueil ---
@@ -332,7 +334,7 @@ export default function TabAccueilScreen() {
           >
             {carouselImages.map((img, i) => (
               <View key={i} style={styles.carouselSlide}>
-                <Image source={{ uri: img }} style={styles.carouselImage} />
+                <Image source={{ uri: img }} style={styles.carouselImage} resizeMode="cover" />
               </View>
             ))}
           </ScrollView>
@@ -471,12 +473,7 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 180,
     borderRadius: 16,
-    resizeMode: "cover",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 5,
+    boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.15)',
   },
   dotsContainer: {
     flexDirection: "row",

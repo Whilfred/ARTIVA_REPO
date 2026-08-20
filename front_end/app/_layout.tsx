@@ -1,6 +1,6 @@
 // ARTIVA/front_end/app/_layout.tsx
 import React, { useEffect } from 'react';
-import { Stack, SplashScreen } from 'expo-router';
+import { Stack, SplashScreen, ThemeProvider, DarkTheme, DefaultTheme } from 'expo-router';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { CartProvider } from '../context/CartContext';
 import { WishlistProvider } from '../context/WishlistContext';
@@ -8,7 +8,8 @@ import { I18nextProvider } from 'react-i18next';
 import i18n from '../i18n';
 import LoadingArtiva from './product/LoadingArtiva';
 
-import { ThemeProvider, DarkTheme, DefaultTheme } from '@react-navigation/native';
+// Depuis le SDK 56, expo-router refuse de cohabiter avec react-navigation :
+// il fournit lui-meme ThemeProvider, DarkTheme et DefaultTheme.
 
 SplashScreen.preventAutoHideAsync();
 

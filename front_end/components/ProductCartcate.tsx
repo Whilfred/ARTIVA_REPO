@@ -50,7 +50,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ item, onPress }) => {
   };
   return (
     <TouchableOpacity onPress={() => onPress(item.id)} style={[styles.container, {backgroundColor: cardBackgroundColor}]}>
-      <Image source={{ uri: item.imageUrl }} style={styles.image} />
+      <Image source={{ uri: item.imageUrl }} style={styles.image} resizeMode="cover" />
       <TouchableOpacity onPress={handleWishlistToggle} style={styles.wishlistIconContainer}>
         <FontAwesome 
           name={isInWishlist ? "heart" : "heart-o"} 
@@ -75,10 +75,7 @@ const styles = StyleSheet.create({
     // backgroundColor: 'white', // Fond blanc pour la carte
     borderRadius: 8,
     elevation: 2, // Ombre pour Android
-    shadowColor: '#000', // Ombre pour iOS
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.20,
-    shadowRadius: 1.41,
+    boxShadow: '0px 1px 1.41px rgba(0, 0, 0, 0.2)',
     //overflow: 'hidden', // Pour que l'ombre ne soit pas coupée par l'image si elle a un borderRadius
     marginBottom: 10,
   },
@@ -88,7 +85,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#e0e0e0', // Placeholder
     borderTopLeftRadius: 8, 
     borderTopRightRadius: 8,
-    resizeMode: 'cover', // Ajuste l'image pour couvrir l'espace sans déformation
 
   },
   wishlistIconContainer: {

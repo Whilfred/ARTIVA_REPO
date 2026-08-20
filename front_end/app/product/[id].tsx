@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -28,7 +28,8 @@ import ProductCard from "../../components/ProductCard";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import LoadingArtiva from '../product/LoadingArtiva';
-import { Video, ResizeMode } from 'expo-av';
+import { useVideoPlayer, VideoView } from 'expo-video';
+import { API_BASE_URL } from "../../constants/Api"; // adresse du backend (locale ou prod) — voir ce fichier
 
 
 // --- INTERFACES ---
@@ -74,8 +75,9 @@ interface Review {
 
 // --- CONSTANTES ---
 
-const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api";
-  Constants.expoConfig?.extra?.API_BASE_URL ?? "https://back-end-purple-log-1280.fly.dev/api";
+// --- PRODUCTION (désactivé en local) : adresse désormais centralisée dans constants/Api.ts ---
+// const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api";
+//   Constants.expoConfig?.extra?.API_BASE_URL ?? "https://back-end-purple-log-1280.fly.dev/api";
 // J'ai gardé l'IP du fichier 1 qui semble être celle de ton backend actif
 
 const { width: screenWidth } = Dimensions.get("window");
@@ -150,9 +152,41 @@ export default function ProductDetailScreen() {
   const isInWishlist = product ? isProductInWishlist(product.id) : false;
 
 
-  const videoRef = useRef<Video>(null);
+  // --- Vidéo (expo-video, depuis le SDK 57) ---------------------------------
+  // expo-av a été supprimé après le SDK 54. Son composant <Video> est remplacé
+  // par un couple : un objet « player » créé par useVideoPlayer, et une vue
+  // <VideoView> qui l'affiche. Les commandes passent désormais par le player
+  // (player.play()) et non plus par une ref sur la vue.
+  const videoViewRef = useRef<VideoView>(null);
   const [isMuted, setIsMuted] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
+
+  // La source doit garder la même référence d'un rendu à l'autre, sinon le
+  // player serait recréé en boucle. `null` est accepté tant que le produit
+  // n'est pas chargé : les hooks doivent être appelés avant les retours
+  // anticipés plus bas (règle des Hooks).
+  const videoSource = useMemo(
+    () => (product?.video_url ? { uri: product.video_url } : null),
+    [product?.video_url]
+  );
+
+  // Mini-aperçu en surimpression : muet, en boucle, démarrage automatique.
+  const overlayPlayer = useVideoPlayer(videoSource, (player) => {
+    player.loop = true;
+    player.muted = true;
+    player.play();
+  });
+
+  // Lecteur principal : à l'arrêt au départ, piloté par l'utilisateur.
+  const mainPlayer = useVideoPlayer(videoSource, (player) => {
+    player.loop = false;
+    player.muted = true;
+  });
+
+  // Le son du lecteur principal suit le bouton 🔊 / 🔇.
+  useEffect(() => {
+    mainPlayer.muted = isMuted;
+  }, [isMuted, mainPlayer]);
 
   // --- 1. CHARGEMENT PRODUIT ---
   const fetchProductDetails = useCallback(async () => {
@@ -534,14 +568,11 @@ if (isLoading) {
               {/* Mini-player vidéo auto-play, en bas à droite de l'image */}
               {product.video_url && showVideoOverlay && (
                 <View style={styles.videoOverlayBox}>
-                  <Video
-                    source={{ uri: product.video_url }}
+                  <VideoView
+                    player={overlayPlayer}
                     style={{ width: "100%", height: "100%" }}
-                    resizeMode={ResizeMode.COVER}
-                    isMuted
-                    isLooping
-                    shouldPlay
-                    useNativeControls={false}
+                    contentFit="cover"
+                    nativeControls={false}
                   />
                   <TouchableOpacity
                     onPress={() => setShowVideoOverlay(false)}
@@ -883,9 +914,9 @@ if (isLoading) {
         activeOpacity={0.9}
         onPress={() => {
           if (isPlaying) {
-            videoRef.current?.pauseAsync();
+            mainPlayer.pause();
           } else {
-            videoRef.current?.playAsync();
+            mainPlayer.play();
           }
           setIsPlaying(!isPlaying);
         }}
@@ -900,14 +931,12 @@ if (isLoading) {
           overflow: "hidden",
         }}
       >
-        <Video
-          ref={videoRef}
-          source={{ uri: product.video_url }}
+        <VideoView
+          ref={videoViewRef}
+          player={mainPlayer}
           style={{ width: "100%", height: "100%" }}
-          resizeMode={ResizeMode.CONTAIN}
-          isMuted={isMuted}
-          shouldPlay={false}
-          useNativeControls={false}
+          contentFit="contain"
+          nativeControls={false}
         />
 
         {/* ▶️ Play */}
@@ -949,7 +978,7 @@ if (isLoading) {
 
           <TouchableOpacity
             onPress={() =>
-              videoRef.current?.presentFullscreenPlayer()
+              videoViewRef.current?.enterFullscreen()
             }
             style={{
               backgroundColor: "rgba(0,0,0,0.6)",
@@ -1451,11 +1480,7 @@ const styles = StyleSheet.create({
   centered: { flex: 1, justifyContent: "center", alignItems: "center" },
   card: {
     padding: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.05)',
   },
   dotsContainer: {
     flexDirection: "row",
@@ -1501,11 +1526,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#000",
     borderWidth: 2,
     borderColor: "#fff",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
+    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.3)',
   },
   videoOverlayCloseBtn: {
     position: "absolute",
@@ -1593,6 +1614,12 @@ const styles = StyleSheet.create({
     color: "white",
     marginTop: 10,
     fontWeight: "bold",
+    // Volontairement conserve sous cette forme : react-native-web signale
+    // textShadow* comme deprecie au profit de "textShadow", mais React Native
+    // 0.86 ne connait pas encore cette propriete (absente de TextStyle). La
+    // remplacer casserait la compilation TypeScript et le rendu natif.
+    // A rebasculer quand RN exposera "textShadow" — contrairement a boxShadow,
+    // deja disponible, qui a remplace les shadow* ailleurs dans le projet.
     textShadowColor: "black",
     textShadowRadius: 5,
   },
