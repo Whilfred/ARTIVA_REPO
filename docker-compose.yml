@@ -41,6 +41,9 @@ services:
       - ./db/init/03_tables_manquantes.sql:/docker-entrypoint-initdb.d/03_tables_manquantes.sql:ro
       # 04 - jeu de données de démonstration (admin, client, produits...).
       - ./db/init/04_seed.sql:/docker-entrypoint-initdb.d/04_seed.sql:ro
+      # 06 - codes promotionnels : schéma + codes de démonstration couvrant
+      #      chaque règle de validation, y compris celles qui doivent échouer.
+      - ./db/init/06_codes_promo.sql:/docker-entrypoint-initdb.d/06_codes_promo.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U artiva -d artiva"]
       interval: 5s

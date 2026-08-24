@@ -190,6 +190,51 @@ const sendResetPasswordCode = async (to, code) => {
 const sendNewOrderEmails = async (userEmail, adminEmail, orderData) => {
   const customerName = orderData.shipping_address?.name || "Cher client";
 
+  const fcfa = (v) => `${Number(v || 0).toLocaleString("fr-FR")} FCFA`;
+
+  /**
+   * Récapitulatif des montants.
+   *
+   * La ligne de remise n'apparaît que si un code a servi — mais quand c'est le
+   * cas, elle doit être visible sans ambiguïté : c'est la seule trace qui
+   * explique pourquoi la boutique encaisse moins que la somme des articles.
+   */
+  const genererRecapitulatif = () => {
+    const sousTotal = orderData.products_total;
+    const livraison = orderData.shipping_cost;
+    const remise = Number(orderData.discount_amount || 0);
+    const code = orderData.promo_code;
+
+    // Anciennes commandes ou appel sans détail : on n'affiche que le total.
+    if (sousTotal === undefined || livraison === undefined) {
+      return `<p><b>Total :</b> ${fcfa(orderData.amount)}</p>`;
+    }
+
+    return `
+      <table style="margin-top:12px; border-collapse:collapse;">
+        <tr>
+          <td style="padding:4px 16px 4px 0;">Sous-total produits</td>
+          <td style="padding:4px 0; text-align:right;">${fcfa(sousTotal)}</td>
+        </tr>
+        ${remise > 0 ? `
+        <tr style="color:#1e7e34;">
+          <td style="padding:4px 16px 4px 0;">
+            Code promo <b>${code}</b>
+          </td>
+          <td style="padding:4px 0; text-align:right;">- ${fcfa(remise)}</td>
+        </tr>` : ""}
+        <tr>
+          <td style="padding:4px 16px 4px 0;">Livraison</td>
+          <td style="padding:4px 0; text-align:right;">${fcfa(livraison)}</td>
+        </tr>
+        <tr style="border-top:2px solid #333; font-weight:bold;">
+          <td style="padding:8px 16px 4px 0;">Total</td>
+          <td style="padding:8px 0 4px; text-align:right;">${fcfa(orderData.amount)}</td>
+        </tr>
+      </table>
+    `;
+  };
+
   const generateItemsTable = (items) => {
     if (!items || items.length === 0) return "<p>Aucun article.</p>";
 
@@ -237,7 +282,13 @@ const sendNewOrderEmails = async (userEmail, adminEmail, orderData) => {
       subject: "🛒 Votre commande a été enregistrée",
       html: `
         <h2>Merci pour votre commande, ${customerName} !</h2>
+        <p>Commande <b>${orderData.order_number}</b></p>
         ${generateItemsTable(orderData.items)}
+        ${genererRecapitulatif()}
+        ${Number(orderData.discount_amount || 0) > 0 ? `
+        <p style="color:#1e7e34; margin-top:10px;">
+          🎟️ Votre code <b>${orderData.promo_code}</b> vous a fait économiser ${fcfa(orderData.discount_amount)}.
+        </p>` : ""}
         <p>L'équipe Artiva vous remercie 🙏</p>
       `,
     },
@@ -249,11 +300,20 @@ const sendNewOrderEmails = async (userEmail, adminEmail, orderData) => {
     {
       from: `"Artiva 🛍️" <artiva.app@gmail.com>`,
       to: adminEmail,
-      subject: "📦 Nouvelle commande reçue",
+      subject: Number(orderData.discount_amount || 0) > 0
+        ? `📦 Nouvelle commande reçue — code promo ${orderData.promo_code}`
+        : "📦 Nouvelle commande reçue",
       html: `
         <h2>Nouvelle commande reçue</h2>
+        <p><b>Commande :</b> ${orderData.order_number}</p>
         <p><b>Client :</b> ${customerName} (${userEmail})</p>
+        ${Number(orderData.discount_amount || 0) > 0 ? `
+        <p style="background:#e6f4ea; border-left:4px solid #1e7e34; padding:10px 14px; margin:14px 0;">
+          🎟️ <b>Code promo utilisé : ${orderData.promo_code}</b><br/>
+          Remise accordée : ${fcfa(orderData.discount_amount)}
+        </p>` : ""}
         ${generateItemsTable(orderData.items)}
+        ${genererRecapitulatif()}
       `,
     },
     "Order-Admin"

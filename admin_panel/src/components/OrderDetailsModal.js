@@ -202,6 +202,12 @@ function OrderDetailsModal({ isOpen, onClose, orderId, apiBaseUrl, adminToken })
               <p><strong>Date :</strong> {formatDate(orderDetails.createdAt)}</p>
               <p><strong>Statut :</strong> <span className={`status-${orderDetails.status}`}>{orderDetails.status}</span></p>
               <p><strong>Total :</strong> {orderDetails.total} {orderDetails.currency}</p>
+              {orderDetails.promo_code && (
+                <p style={{ color: '#1e7e34' }}>
+                  <strong>Code promo :</strong> {orderDetails.promo_code}
+                  {' '}(remise de {Number(orderDetails.discount_amount).toLocaleString('fr-FR')} {orderDetails.currency})
+                </p>
+              )}
             </div>
 
             <div className="order-section">

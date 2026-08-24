@@ -153,7 +153,16 @@ export default function CheckoutScreen() {
     postalCode: "",
     notes: "",
   });
-  const [discount] = useState(0);
+  // --- Code promotionnel ---------------------------------------------------
+  // La remise n'est jamais calculée ici : elle est demandée au serveur, seul
+  // habilité à dire si un code est valable et combien il vaut. L'écran ne fait
+  // qu'afficher sa réponse.
+  const [promoInput, setPromoInput] = useState("");
+  const [appliedPromo, setAppliedPromo] = useState<{ code: string; reduction: number } | null>(null);
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [isCheckingPromo, setIsCheckingPromo] = useState(false);
+
+  const discount = appliedPromo ? appliedPromo.reduction : 0;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [orderConfirmationData, setOrderConfirmationData] = useState<OrderConfirmationData | null>(null);
@@ -252,6 +261,9 @@ const handleSubmitOrder = async () => {
     shipping_cost: shippingCost,
     shipping_method: getZoneLabel(formData.country, formData.city),
     total_amount: total,
+    // Seul le code circule : le serveur recalcule la remise. Envoyer le montant
+    // reviendrait à laisser l'application fixer son propre prix.
+    promo_code: appliedPromo ? appliedPromo.code : null,
   };
 
   console.log("📦 Payload envoyé :", JSON.stringify(orderPayload, null, 2));
@@ -287,6 +299,107 @@ const handleSubmitOrder = async () => {
     setIsSubmitting(false);
   }
 };
+
+  // --- Code promotionnel ---------------------------------------------------
+
+  const appliquerCodePromo = async () => {
+    const code = promoInput.trim();
+    if (!code) {
+      setPromoError("Saisissez un code.");
+      return;
+    }
+    setIsCheckingPromo(true);
+    setPromoError(null);
+    try {
+      const reponse = await fetch(`${API_BASE_URL}/promo/valider`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${userToken}`,
+        },
+        body: JSON.stringify({
+          code,
+          cart_items: cartItems.map((item) => ({ product_id: item.id, quantity: item.quantity })),
+        }),
+      });
+      const data = await reponse.json();
+
+      // Un code refusé revient en 200 avec valide:false — ce n'est pas une
+      // panne, mais une réponse à afficher telle quelle.
+      if (!reponse.ok) {
+        setPromoError(data.message || "Impossible de vérifier ce code.");
+        return;
+      }
+      if (!data.valide) {
+        setAppliedPromo(null);
+        setPromoError(data.message);
+        return;
+      }
+
+      setAppliedPromo({ code: data.code, reduction: data.reduction });
+      setPromoInput("");
+      setPromoError(null);
+    } catch (err) {
+      console.error("Erreur validation code promo:", err);
+      setPromoError("Vérification impossible. Vérifiez votre connexion.");
+    } finally {
+      setIsCheckingPromo(false);
+    }
+  };
+
+  const retirerCodePromo = () => {
+    setAppliedPromo(null);
+    setPromoError(null);
+    setPromoInput("");
+  };
+
+  // Quand le panier change (article retiré, quantité modifiée), la remise
+  // devient caduque — et pour un pourcentage, son montant change carrément.
+  //
+  // Plutôt que de retirer le code et d'obliger le client à le ressaisir, on le
+  // revalide en silence : la remise se met à jour toute seule, et le code n'est
+  // abandonné que s'il est réellement devenu inapplicable (montant minimum qui
+  // n'est plus atteint, par exemple). Le message dit alors pourquoi.
+  useEffect(() => {
+    if (!appliedPromo) return;
+
+    let annule = false;
+    const codeEnCours = appliedPromo.code;
+
+    (async () => {
+      try {
+        const reponse = await fetch(`${API_BASE_URL}/promo/valider`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${userToken}` },
+          body: JSON.stringify({
+            code: codeEnCours,
+            cart_items: cartItems.map((item) => ({ product_id: item.id, quantity: item.quantity })),
+          }),
+        });
+        const data = await reponse.json();
+        if (annule) return;   // le panier a encore changé entre-temps
+
+        if (reponse.ok && data.valide) {
+          // Ne remplacer l'état que si le montant a bougé, sinon ce useEffect
+          // se redéclencherait sans fin.
+          setAppliedPromo((actuel) =>
+            actuel && actuel.reduction !== data.reduction
+              ? { code: data.code, reduction: data.reduction }
+              : actuel
+          );
+        } else {
+          setAppliedPromo(null);
+          setPromoError(data.message || "Ce code n'est plus applicable à votre panier.");
+        }
+      } catch {
+        // Hors ligne : on garde la remise affichée. Le serveur la revérifiera
+        // de toute façon au moment de valider la commande.
+      }
+    })();
+
+    return () => { annule = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subTotal]);
 
   const handleDownloadQrCode = async () => {
     if (Platform.OS === "web") {
@@ -387,12 +500,66 @@ const handleSubmitOrder = async () => {
           <Text style={{ color: colors.subtleText, fontSize: 15 }}>Sous-total</Text>
           <Text style={{ color: colors.subtleText, fontSize: 15 }}>{subTotal.toFixed(2)} FCFA</Text>
         </View>
-        {discount > 0 && (
+        {discount > 0 && appliedPromo && (
           <View style={styles.totalRow}>
-            <Text style={{ color: colors.subtleText, fontSize: 15 }}>Réduction</Text>
+            <Text style={{ color: colors.subtleText, fontSize: 15 }}>
+              Réduction ({appliedPromo.code})
+            </Text>
             <Text style={{ color: "#4CAF50", fontSize: 15 }}>- {discount.toFixed(2)} FCFA</Text>
           </View>
         )}
+
+        {/* Code promotionnel */}
+        <View style={[styles.promoSection, { borderTopColor: colors.border }]}>
+          <Text style={{ color: colors.text, fontWeight: "600", marginBottom: 8, fontSize: 14 }}>
+            🎟️ Code promo
+          </Text>
+
+          {appliedPromo ? (
+            // Code appliqué : on montre ce qui a été obtenu, et comment le retirer.
+            <View style={[styles.promoApplied, { borderColor: "#4CAF50" }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: "#4CAF50", fontWeight: "700", fontSize: 15 }}>
+                  {appliedPromo.code}
+                </Text>
+                <Text style={{ color: colors.subtleText, fontSize: 13, marginTop: 2 }}>
+                  {appliedPromo.reduction.toLocaleString("fr-FR")} FCFA de réduction
+                </Text>
+              </View>
+              <TouchableOpacity onPress={retirerCodePromo} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Text style={{ color: "#E53935", fontSize: 14, fontWeight: "600" }}>Retirer</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <TextInput
+                style={[styles.promoInput, { borderColor: colors.border, color: colors.text, backgroundColor: colors.background }]}
+                placeholder="Saisir un code"
+                placeholderTextColor={colors.subtleText}
+                value={promoInput}
+                onChangeText={(t) => { setPromoInput(t); setPromoError(null); }}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                editable={!isCheckingPromo}
+                onSubmitEditing={appliquerCodePromo}
+                returnKeyType="done"
+              />
+              <TouchableOpacity
+                style={[styles.promoButton, { backgroundColor: colors.tint, opacity: isCheckingPromo || !promoInput.trim() ? 0.5 : 1 }]}
+                onPress={appliquerCodePromo}
+                disabled={isCheckingPromo || !promoInput.trim()}
+              >
+                {isCheckingPromo
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>Appliquer</Text>}
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {promoError && (
+            <Text style={{ color: "#E53935", fontSize: 13, marginTop: 6 }}>{promoError}</Text>
+          )}
+        </View>
 
         {/* Sélection pays + ville pour estimer la livraison dès l'étape 1 */}
         <View style={[styles.shippingEstimate, { borderTopColor: colors.border }]}>
@@ -794,6 +961,35 @@ const styles = StyleSheet.create({
     marginTop: 15,
     paddingTop: 15,
     borderTopWidth: 1,
+  },
+  promoSection: {
+    marginTop: 15,
+    paddingTop: 15,
+    borderTopWidth: 1,
+  },
+  promoInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+    // Les codes s'écrivent en majuscules : autant que la saisie le montre.
+    letterSpacing: 1,
+  },
+  promoButton: {
+    borderRadius: 8,
+    paddingHorizontal: 18,
+    justifyContent: "center",
+    alignItems: "center",
+    minWidth: 100,
+  },
+  promoApplied: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
   },
   shippingBadge: {
     borderWidth: 1,

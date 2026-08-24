@@ -200,7 +200,7 @@ function OrderManagementPage() {
         <table className="custom-table">
           <thead>
             <tr>
-              <th>ID</th><th>N° Commande</th><th>Client (Email)</th><th>Date</th><th>Total</th><th>Statut</th><th>Actions</th>
+              <th>ID</th><th>N° Commande</th><th>Client (Email)</th><th>Date</th><th>Total</th><th>Code promo</th><th>Statut</th><th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -211,6 +211,17 @@ function OrderManagementPage() {
                 <td>{order.userName || 'N/A'} <small>({order.userEmail || 'N/A'})</small></td>
                 <td>{formatDate(order.createdAt)}</td>
                 <td>{order.total} {order.currency}</td>
+                <td>
+                  {order.promo_code ? (
+                    <span title={`Remise de ${Number(order.discount_amount).toLocaleString('fr-FR')} FCFA`}
+                          style={{ backgroundColor: '#e6f4ea', color: '#1e7e34', padding: '3px 9px',
+                                   borderRadius: 12, fontSize: '0.82em', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                      {order.promo_code} · -{Number(order.discount_amount).toLocaleString('fr-FR')}
+                    </span>
+                  ) : (
+                    <span style={{ color: '#adb5bd' }}>—</span>
+                  )}
+                </td>
                 <td>
                   <select 
                     value={order.status} 

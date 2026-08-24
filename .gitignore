@@ -29,3 +29,6 @@ local.properties
 # règle « .env » ci-dessus ne le couvre pas. Ignoré pour éviter tout commit
 # accidentel. À déplacer hors du dépôt.
 /env
+
+# Données de test locales : ne doivent jamais partir sur le dépôt.
+db/init/05_donnees_de_test.sql

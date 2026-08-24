@@ -13,6 +13,7 @@ const productTagRoutes = require('./routes/productTagRoutes');
 const wishlistRoutes = require('./routes/wishlistRoutes');
 const cartRoutes = require('./routes/cartRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const promoRoutes = require('./routes/promoRoutes');
 const avisRouter = require('./routes/avis'); // <-- Ajouter le router des avis
 
 // NOTE : routes/dashboardRoutes.js n'est volontairement PAS importé ici.
@@ -53,6 +54,7 @@ app.use('/api/product-tags', productTagRoutes);
 app.use('/api/wishlist', wishlistRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/promo', promoRoutes);
 
 // Monter le router des avis à la racine /api
 app.use('/api', avisRouter); // <-- toutes les routes dans avis.js auront le préfixe /api

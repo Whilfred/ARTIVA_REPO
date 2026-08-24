@@ -1,5 +1,6 @@
 // ARTIVA/back_end/controllers/orderController.js
 const db = require('../config/db');
+const promoController = require('../controllers/promoController');
 const { v4: uuidv4 } = require('uuid');
 const { sendNewOrderEmails } = require("../utils/sendEmail.js"); // <-- AJOUT
 
@@ -16,7 +17,8 @@ exports.createOrder = async (req, res) => {
     shipping_cost,
     shipping_method,
     status,
-    total_amount: frontendTotalAmount
+    total_amount: frontendTotalAmount,
+    promo_code
   } = req.body;
 
   if (!cart_items || !Array.isArray(cart_items) || cart_items.length === 0) {
@@ -88,9 +90,34 @@ exports.createOrder = async (req, res) => {
 
     // ✅ Utiliser shipping_cost envoyé par le frontend (1 500, 2 000, 5 000 ou 7 200)
     const finalShippingCost = shipping_cost !== undefined ? parseFloat(shipping_cost) : 0;
-    
-    // ✅ Utiliser total_amount envoyé par le frontend
-    const calculatedTotal = productsTotal + finalShippingCost;
+
+    // --- Code promotionnel ---------------------------------------------------
+    // La remise est revalidée ICI, dans la transaction, et jamais reprise de ce
+    // que l'écran de paiement a calculé : c'est le seul endroit où l'on connaît
+    // le contenu réel du panier et où le quota du code peut être verrouillé.
+    // Si le code est devenu invalide entre l'écran et la validation (expiré,
+    // épuisé), la commande est refusée plutôt que passée au mauvais prix.
+    let discountAmount = 0;
+    let appliedPromoCode = null;
+    let appliedPromo = null;
+
+    if (promo_code && String(promo_code).trim()) {
+      const verif = await promoController.verifierCode(
+        client, String(promo_code), userId, productsTotal, true
+      );
+      if (!verif.valide) {
+        const err = new Error(verif.message);
+        err.statusCode = 400;
+        throw err;
+      }
+      discountAmount = verif.reduction;
+      appliedPromo = verif.promo;
+      appliedPromoCode = verif.promo.code;
+    }
+
+    // La remise porte sur les produits seuls : les frais de livraison sont une
+    // dépense réelle pour la boutique et restent dus.
+    const calculatedTotal = productsTotal - discountAmount + finalShippingCost;
     let finalTotalAmount = frontendTotalAmount !== undefined ? parseFloat(frontendTotalAmount) : calculatedTotal;
 
     // Vérification de cohérence
@@ -111,9 +138,10 @@ exports.createOrder = async (req, res) => {
     const orderQuery = `
       INSERT INTO orders (
         order_number, user_id, status, total_amount, currency,
-        shipping_address, shipping_cost, shipping_method, notes
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      RETURNING id, order_number, status, total_amount, created_at;
+        shipping_address, shipping_cost, shipping_method, notes,
+        promo_code, discount_amount
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      RETURNING id, order_number, status, total_amount, discount_amount, promo_code, created_at;
     `;
 
     const orderResult = await client.query(orderQuery, [
@@ -125,10 +153,26 @@ exports.createOrder = async (req, res) => {
       JSON.stringify(shipping_address),
       finalShippingCost.toFixed(2),
       shipping_method || null,
-      notes || null
+      notes || null,
+      appliedPromoCode,
+      discountAmount.toFixed(2)
     ]);
 
     const createdOrder = orderResult.rows[0];
+
+    // Journaliser l'utilisation du code, dans la même transaction que la
+    // commande : si celle-ci échoue plus loin, le quota n'est pas consommé.
+    if (appliedPromo) {
+      await client.query(
+        `INSERT INTO promo_code_usages (promo_code_id, user_id, order_id, discount_amount)
+         VALUES ($1, $2, $3, $4)`,
+        [appliedPromo.id, userId, createdOrder.id, discountAmount.toFixed(2)]
+      );
+      await client.query(
+        'UPDATE promo_codes SET used_count = used_count + 1 WHERE id = $1',
+        [appliedPromo.id]
+      );
+    }
 
     // 3. Insérer les items
     for (const item of orderItemsData) {
@@ -191,6 +235,12 @@ exports.createOrder = async (req, res) => {
         items: orderItemsData,
         shipping_address,
         order_status: orderStatus,
+        // Récapitulatif financier : sans ces trois lignes, l'email annonçait un
+        // montant sans dire d'où il venait — impossible d'y voir une remise.
+        products_total: productsTotal,
+        shipping_cost: finalShippingCost,
+        promo_code: appliedPromoCode,
+        discount_amount: discountAmount,
       });
     } catch (emailError) {
       console.error("Erreur envoi email:", emailError);
@@ -209,6 +259,14 @@ exports.createOrder = async (req, res) => {
   } catch (error) {
     await client.query('ROLLBACK');
     console.error("❌ Erreur création commande:", error);
+
+    // Un code promo refusé (expiré, épuisé, montant insuffisant) porte son
+    // propre code HTTP : c'est une réponse métier destinée au client, pas une
+    // panne du serveur. Sans cela, l'application afficherait « erreur serveur »
+    // là où il faut lire « ce code a expiré ».
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
 
     if (error.message.includes("Stock insuffisant") || error.message.includes("Produit")) {
       return res.status(400).json({ message: error.message });
@@ -266,6 +324,7 @@ exports.getAllOrdersAdmin = async (req, res) => {
       o.id as "orderId", o.order_number, o.user_id, u.name as "userName", u.email as "userEmail",
       o.status, o.total_amount as total, o.currency, 
       o.shipping_address, o.billing_address, o.notes,
+      o.promo_code, o.discount_amount,
       o.created_at as "createdAt", o.updated_at as "updatedAt",
       COUNT(*) OVER() AS total_count -- Compte total pour la pagination
     FROM orders o
@@ -334,6 +393,7 @@ exports.getOrderDetailsAdmin = async (req, res) => {
         o.status, o.total_amount as total, o.currency, 
         o.shipping_address, o.billing_address, o.notes,
         o.shipping_method, o.shipping_cost,
+        o.promo_code, o.discount_amount,
         o.created_at as "createdAt", o.updated_at as "updatedAt"
       FROM orders o
       LEFT JOIN users u ON o.user_id = u.id
