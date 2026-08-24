@@ -223,10 +223,18 @@ const sendNewOrderEmails = async (userEmail, adminEmail, orderData) => {
           </td>
           <td style="padding:4px 0; text-align:right;">- ${fcfa(remise)}</td>
         </tr>` : ""}
+        ${orderData.free_shipping_applied ? `
+        <tr style="color:#1e7e34;">
+          <td style="padding:4px 16px 4px 0;">
+            Livraison <b>offerte</b>
+            <span style="color:#666;">(valeur ${fcfa(orderData.shipping_normal)})</span>
+          </td>
+          <td style="padding:4px 0; text-align:right;">0 FCFA</td>
+        </tr>` : `
         <tr>
           <td style="padding:4px 16px 4px 0;">Livraison</td>
           <td style="padding:4px 0; text-align:right;">${fcfa(livraison)}</td>
-        </tr>
+        </tr>`}
         <tr style="border-top:2px solid #333; font-weight:bold;">
           <td style="padding:8px 16px 4px 0;">Total</td>
           <td style="padding:8px 0 4px; text-align:right;">${fcfa(orderData.amount)}</td>
@@ -289,6 +297,17 @@ const sendNewOrderEmails = async (userEmail, adminEmail, orderData) => {
         <p style="color:#1e7e34; margin-top:10px;">
           🎟️ Votre code <b>${orderData.promo_code}</b> vous a fait économiser ${fcfa(orderData.discount_amount)}.
         </p>` : ""}
+        ${orderData.free_shipping_applied ? `
+        <p style="color:#1e7e34; margin-top:10px;">
+          🚚 Votre livraison gratuite a été appliquée : ${fcfa(orderData.shipping_normal)} économisés.
+        </p>` : ""}
+        ${orderData.free_shipping_earned ? `
+        <p style="background:#e6f4ea; border-left:4px solid #1e7e34; padding:10px 14px; margin:14px 0;">
+          🎁 <b>Bonne nouvelle : votre prochaine livraison est offerte !</b><br/>
+          Vos achats ont atteint ${fcfa(orderData.free_shipping_earned.amount)}.
+          Avantage valable jusqu'au
+          ${new Date(orderData.free_shipping_earned.expires_at).toLocaleDateString("fr-FR")}.
+        </p>` : ""}
         <p>L'équipe Artiva vous remercie 🙏</p>
       `,
     },
@@ -300,9 +319,18 @@ const sendNewOrderEmails = async (userEmail, adminEmail, orderData) => {
     {
       from: `"Artiva 🛍️" <artiva.app@gmail.com>`,
       to: adminEmail,
-      subject: Number(orderData.discount_amount || 0) > 0
-        ? `📦 Nouvelle commande reçue — code promo ${orderData.promo_code}`
-        : "📦 Nouvelle commande reçue",
+      // L'objet porte les avantages accordés : une remise ou une livraison
+      // offerte doit se voir dans la boîte de réception, sans ouvrir l'email.
+      subject: (() => {
+        const mentions = [];
+        if (Number(orderData.discount_amount || 0) > 0) {
+          mentions.push(`code promo ${orderData.promo_code}`);
+        }
+        if (orderData.free_shipping_applied) mentions.push('livraison offerte');
+        return mentions.length > 0
+          ? `📦 Nouvelle commande reçue — ${mentions.join(' + ')}`
+          : '📦 Nouvelle commande reçue';
+      })(),
       html: `
         <h2>Nouvelle commande reçue</h2>
         <p><b>Commande :</b> ${orderData.order_number}</p>
@@ -312,8 +340,19 @@ const sendNewOrderEmails = async (userEmail, adminEmail, orderData) => {
           🎟️ <b>Code promo utilisé : ${orderData.promo_code}</b><br/>
           Remise accordée : ${fcfa(orderData.discount_amount)}
         </p>` : ""}
+        ${orderData.free_shipping_applied ? `
+        <p style="background:#e6f4ea; border-left:4px solid #1e7e34; padding:10px 14px; margin:14px 0;">
+          🚚 <b>Livraison offerte</b> — avantage acquis par cumul d'achats.<br/>
+          Frais non facturés : ${fcfa(orderData.shipping_normal)}
+        </p>` : ""}
         ${generateItemsTable(orderData.items)}
         ${genererRecapitulatif()}
+        ${orderData.free_shipping_earned ? `
+        <p style="color:#555; margin-top:14px; font-size:13px;">
+          🎁 Ce client vient de débloquer la livraison gratuite pour sa prochaine
+          commande (cumul ${fcfa(orderData.free_shipping_earned.amount)}, valable jusqu'au
+          ${new Date(orderData.free_shipping_earned.expires_at).toLocaleDateString("fr-FR")}).
+        </p>` : ""}
       `,
     },
     "Order-Admin"

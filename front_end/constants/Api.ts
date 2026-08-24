@@ -29,14 +29,28 @@ const LOCAL_API_PORT = 3001;
  *
  * Le piège classique en React Native : « localhost » désigne le téléphone
  * lui-même, pas l'ordinateur qui fait tourner le serveur. Il faut donc l'adresse
- * de l'ordinateur sur le réseau local (ex. 192.168.137.190).
+ * de l'ordinateur sur le réseau local (ex. 192.168.1.20).
  *
  * On la déduit automatiquement de l'adresse du serveur Metro : quand on lance
- * `npx expo start`, Expo expose `hostUri` (ex. "192.168.137.190:8081"), qui est
+ * `npx expo start`, Expo expose `hostUri` (ex. "192.168.1.20:8081"), qui est
  * précisément l'IP de l'ordinateur telle que le téléphone la voit. Résultat :
  * rien à modifier quand on change de réseau ou que l'IP bouge.
  */
 function resolveLocalHost(): string {
+  // --- Web : l'adresse est sous nos yeux ------------------------------------
+  // Expo ne transmet PAS `hostUri` au navigateur. Sans ce cas particulier, on
+  // retombait sur « localhost » — qui, depuis un autre PC du réseau, désigne cet
+  // autre PC et non le serveur. D'où l'obligation de figer l'IP dans .env, et
+  // l'application cassée à chaque changement de réseau.
+  //
+  // `window.location.hostname` est l'adresse par laquelle le navigateur a
+  // justement réussi à joindre Metro : elle est donc joignable par construction,
+  // que la page soit ouverte en localhost ou par l'IP réseau. Le backend tourne
+  // sur la même machine que Metro, au port 3001.
+  if (Platform.OS === "web" && typeof window !== "undefined" && window.location?.hostname) {
+    return window.location.hostname;
+  }
+
   const hostUri =
     Constants.expoConfig?.hostUri ??
     // Champs de repli selon la version d'Expo / le mode de lancement
@@ -66,7 +80,7 @@ function resolveLocalHost(): string {
 
   // Repli si Metro n'a pas transmis l'info (build autonome, test unitaire...)
   if (Platform.OS === "android") return "10.0.2.2"; // alias de l'hôte sur l'émulateur Android
-  return "localhost"; // navigateur (expo start --web) et simulateur iOS
+  return "localhost"; // simulateur iOS (le web est traité plus haut)
 }
 
 /**

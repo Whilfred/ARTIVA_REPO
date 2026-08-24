@@ -11,6 +11,8 @@ import ReportsPage from './pages/ReportsPage';
 import ScanOrderPage from './pages/ScanOrderPage';
 import ProductTagsPage from './pages/ProductTagsPage';
 import PromoCodesPage from './pages/PromoCodesPage';
+import FreeShippingPage from './pages/FreeShippingPage';
+import ShippingZonesPage from './pages/ShippingZonesPage';
 
 
 import './App.css';
@@ -18,7 +20,7 @@ import './App.css';
 import {
   LayoutDashboard, ShoppingCart, Tag, Users, Settings, BarChart2,
   LogOut as LogOutIcon, ShieldCheck, FolderTree, ListOrdered,
-  ScanLine as ScanIcon, Menu as MenuIcon, X as XIcon, Ticket
+  ScanLine as ScanIcon, Menu as MenuIcon, X as XIcon, Ticket, Truck, MapPin
 } from 'lucide-react';
 
 // Composant pour la Sidebar
@@ -33,6 +35,8 @@ const Sidebar = ({ handleLogout, isMobileOpen, onCloseMobile }) => {
     { path: "/users", label: "Utilisateurs", Icon: Users },
     { path: "/orders", label: "Commandes", Icon: ListOrdered },
     { path: "/promo-codes", label: "Codes Promo", Icon: Ticket },
+    { path: "/zones-livraison", label: "Zones de Livraison", Icon: MapPin },
+    { path: "/livraison-gratuite", label: "Livraison Gratuite", Icon: Truck },
     { path: "/reports", label: "Reports", Icon: BarChart2 },
     { path: "/scan-order", label: "Scanner Commande", Icon: ScanIcon },
   ];
@@ -142,6 +146,8 @@ function App() {
         <Route path="/users" element={<ProtectedRoute><UserManagementPage /></ProtectedRoute>}/>
         <Route path="/orders" element={<ProtectedRoute><OrderManagementPage /></ProtectedRoute>}/>
         <Route path="/promo-codes" element={<ProtectedRoute><PromoCodesPage /></ProtectedRoute>}/>
+        <Route path="/zones-livraison" element={<ProtectedRoute><ShippingZonesPage /></ProtectedRoute>}/>
+        <Route path="/livraison-gratuite" element={<ProtectedRoute><FreeShippingPage /></ProtectedRoute>}/>
         <Route path="/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
         <Route path="/" element={ localStorage.getItem('adminToken') ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to={localStorage.getItem('adminToken') ? "/dashboard" : "/login"} replace />} />

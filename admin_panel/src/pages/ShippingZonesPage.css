@@ -1,0 +1,195 @@
+/* admin_panel/src/pages/ShippingZonesPage.css
+   Zones et tarifs de livraison. La structure générale (page-header, back-link,
+   custom-table, modal-overlay) vient des feuilles déjà importées ; ce fichier
+   n'ajoute que ce qui est propre à cette page. */
+
+.sz-intro {
+  background: #eff6ff;
+  border-left: 4px solid #2563eb;
+  padding: 12px 16px;
+  border-radius: 0 8px 8px 0;
+  font-size: 14px;
+  color: #1e3a5f;
+  line-height: 1.6;
+  margin: 0 0 24px;
+  max-width: 900px;
+}
+
+/* --- Tableau ---------------------------------------------------------------- */
+.sz-tarif {
+  font-weight: 700;
+  color: #111827;
+  white-space: nowrap;
+}
+
+.sz-villes {
+  font-size: 12.5px;
+  color: #6b7280;
+  line-height: 1.5;
+  max-width: 340px;
+}
+
+.sz-villes strong { color: #374151; }
+
+.sz-marqueur {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 11px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  margin-right: 5px;
+}
+
+.sz-marqueur.defaut { background: #dbeafe; color: #1e40af; }
+.sz-marqueur.repli  { background: #fef3c7; color: #92400e; }
+.sz-marqueur.actif  { background: #d1fae5; color: #065f46; }
+.sz-marqueur.eteint { background: #f3f4f6; color: #6b7280; }
+
+/* --- Formulaire de la fenêtre ---------------------------------------------- */
+.sz-champs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.sz-champ.large { grid-column: 1 / -1; }
+
+.sz-champ label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.sz-champ input[type="text"],
+.sz-champ input[type="number"] {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14.5px;
+  box-sizing: border-box;
+}
+
+.sz-champ input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.sz-aide {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-top: 5px;
+  line-height: 1.45;
+}
+
+.sz-case {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 12px 14px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-bottom: 10px;
+}
+
+.sz-case input { margin-top: 2px; width: 16px; height: 16px; cursor: pointer; }
+.sz-case-titre { font-weight: 600; color: #111827; font-size: 13.5px; }
+.sz-case-aide  { font-size: 12px; color: #6b7280; margin-top: 2px; display: block; }
+
+/* --- Saisie des villes ------------------------------------------------------ */
+/* Chaque ville est une pastille supprimable : plus lisible qu'une liste séparée
+   par des virgules, où une faute de frappe passe inaperçue. */
+.sz-villes-boite {
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 8px;
+  min-height: 84px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-content: flex-start;
+}
+
+.sz-pastille-ville {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #eef2ff;
+  color: #3730a3;
+  border-radius: 14px;
+  padding: 4px 6px 4px 11px;
+  font-size: 13px;
+}
+
+.sz-pastille-ville button {
+  border: none;
+  background: transparent;
+  color: #6366f1;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 3px;
+}
+
+.sz-pastille-ville button:hover { color: #dc2626; }
+
+.sz-villes-boite input {
+  border: none;
+  outline: none;
+  flex: 1;
+  min-width: 130px;
+  font-size: 14px;
+  padding: 5px;
+}
+
+/* --- Pied de la fenêtre ----------------------------------------------------- */
+.sz-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.sz-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sz-btn.principal   { background: #2563eb; color: #fff; }
+.sz-btn.principal:hover:not(:disabled) { background: #1d4ed8; }
+.sz-btn.principal:disabled { background: #9ca3af; cursor: not-allowed; }
+.sz-btn.secondaire  { background: #f3f4f6; color: #374151; }
+.sz-btn.secondaire:hover { background: #e5e7eb; }
+
+.sz-erreur {
+  background: #fef2f2;
+  border-left: 4px solid #dc2626;
+  color: #7f1d1d;
+  padding: 11px 15px;
+  border-radius: 0 8px 8px 0;
+  font-size: 13.5px;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.sz-vide {
+  text-align: center;
+  color: #6b7280;
+  padding: 34px 16px;
+  font-size: 14px;
+}

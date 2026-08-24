@@ -1,0 +1,176 @@
+/* admin_panel/src/pages/FreeShippingPage.css
+   Styles propres à la page des conditions de livraison gratuite.
+   La structure générale (page-header, back-link, custom-table) vient de
+   ProductManagementPage.css, importé en plus de ce fichier. */
+
+/* --- Bandeau de synthèse --------------------------------------------------- */
+.fs-stats {
+  display: grid;
+  /* auto-fit plutôt qu'un nombre fixe de colonnes : les quatre cartes passent
+     d'elles-mêmes sur une ou deux lignes sur un écran étroit. */
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 16px;
+  margin-bottom: 26px;
+}
+
+.fs-stat {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+
+.fs-stat-valeur {
+  font-size: 26px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.1;
+}
+
+.fs-stat-libelle {
+  font-size: 12px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-top: 6px;
+}
+
+.fs-stat.disponibles .fs-stat-valeur { color: #1e7e34; }
+.fs-stat.offert     .fs-stat-valeur { color: #b45309; }
+
+/* --- Formulaire des conditions -------------------------------------------- */
+.fs-carte {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 22px 24px;
+  margin-bottom: 26px;
+  max-width: 760px;
+}
+
+.fs-carte h3 {
+  margin: 0 0 4px;
+  font-size: 17px;
+  color: #111827;
+}
+
+.fs-carte-aide {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0 0 20px;
+}
+
+.fs-champs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 18px;
+}
+
+.fs-champ label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.fs-champ input[type="number"] {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 15px;
+  box-sizing: border-box;
+}
+
+.fs-champ input[type="number"]:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.fs-champ-aide {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-top: 5px;
+}
+
+/* Interrupteur d'activation : une case à cocher native reste la plus lisible,
+   on se contente de lui donner de l'air et une zone cliquable généreuse. */
+.fs-interrupteur {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 16px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  cursor: pointer;
+}
+
+.fs-interrupteur input { margin-top: 3px; width: 17px; height: 17px; cursor: pointer; }
+.fs-interrupteur-titre { font-weight: 600; color: #111827; font-size: 14px; }
+.fs-interrupteur-aide  { font-size: 12px; color: #6b7280; margin-top: 3px; }
+
+/* Phrase récapitulant les réglages en français. Le formulaire seul laisse le
+   doute sur ce que la combinaison des trois champs produit réellement. */
+.fs-resume {
+  background: #eff6ff;
+  border-left: 4px solid #2563eb;
+  padding: 12px 16px;
+  border-radius: 0 8px 8px 0;
+  font-size: 14px;
+  color: #1e3a5f;
+  line-height: 1.55;
+  margin: 20px 0;
+}
+
+.fs-resume.inactif {
+  background: #fef2f2;
+  border-left-color: #dc2626;
+  color: #7f1d1d;
+}
+
+.fs-actions { display: flex; align-items: center; gap: 14px; }
+
+.fs-enregistrer {
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 11px 22px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.fs-enregistrer:hover:not(:disabled) { background: #1d4ed8; }
+.fs-enregistrer:disabled { background: #9ca3af; cursor: not-allowed; }
+
+.fs-message      { font-size: 13px; font-weight: 500; }
+.fs-message.ok   { color: #1e7e34; }
+.fs-message.ko   { color: #dc2626; }
+
+/* --- Pastilles de statut du journal --------------------------------------- */
+.fs-pastille {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.fs-pastille.disponible { background: #d1fae5; color: #065f46; }
+.fs-pastille.consomme   { background: #dbeafe; color: #1e40af; }
+.fs-pastille.expire     { background: #f3f4f6; color: #6b7280; }
+
+.fs-vide {
+  text-align: center;
+  color: #6b7280;
+  padding: 34px 16px;
+  font-size: 14px;
+}

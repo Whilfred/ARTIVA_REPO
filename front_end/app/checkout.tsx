@@ -37,58 +37,30 @@ import { API_BASE_URL } from "../constants/Api"; // adresse du backend (locale o
 // ============================================================
 // TARIFS DE LIVRAISON
 // ============================================================
+// La grille n'est plus ici. Elle vit en base et se règle depuis le panel
+// d'administration ; cet écran la reçoit du serveur (/api/livraison/zones pour
+// les listes, /api/livraison/statut pour le tarif d'une destination).
+//
+// Auparavant, les mêmes tarifs étaient écrits ici ET dans back_end : changer le
+// prix d'Abidjan demandait de modifier les deux fichiers, et un oubli affichait
+// au client un montant différent de celui facturé.
+//
+// Le tarif affiché est donc celui calculé par le serveur, jamais recalculé
+// localement — il ne peut plus diverger de ce qui sera réellement facturé.
+// ============================================================
 
-// Villes du Sud Bénin
-const VILLES_SUD = [
-  "Cotonou", "Porto-Novo", "Abomey-Calavi", "Sèmè-Kpodji",
-  "Ouidah", "Allada", "Lokossa", "Dogbo", "Grand-Popo", "Sakété", "Kétou",
-];
-
-// Villes du Nord Bénin
-const VILLES_NORD = [
-  "Parakou", "Djougou", "Kandi", "Natitingou", "Bohicon",
-  "Abomey", "Savalou", "Dassa-Zoumé", "Nikki", "Tanguiéta",
-  "Malanville", "Banikoara",
-];
-
-// Villes du Burkina Faso
-const VILLES_BURKINA = [
-  "Ouagadougou", "Bobo-Dioulasso", "Koudougou", "Ouahigouya",
-  "Kaya", "Banfora", "Fada N'Gourma",
-];
-
-// Villes de Côte d'Ivoire
-const VILLES_COTE_IVOIRE = [
-  "Abidjan", "Yamoussoukro", "Bouaké", "San-Pédro", "Korhogo", "Daloa",
-];
-
-// Pays disponibles
-const PAYS_DISPONIBLES = ["Bénin", "Burkina Faso", "Côte d'Ivoire"];
-
-// Calcul des frais de livraison selon le pays et la ville
-const getShippingCost = (pays: string, ville: string): number => {
-  if (pays === "Burkina Faso") return 5000;
-  if (pays === "Côte d'Ivoire") return 7200;
-  // Bénin
-  if (VILLES_SUD.includes(ville)) return 1500;
-  if (VILLES_NORD.includes(ville)) return 2000;
-  return 2000; // défaut
+type ZoneLivraison = {
+  id: number;
+  name: string;
+  label: string;
+  country: string;
+  cost: number;
+  cities: string[];
 };
 
-// Obtenir la liste des villes selon le pays
-const getVillesByPays = (pays: string): string[] => {
-  if (pays === "Burkina Faso") return VILLES_BURKINA;
-  if (pays === "Côte d'Ivoire") return VILLES_COTE_IVOIRE;
-  return [...VILLES_SUD, ...VILLES_NORD];
-};
-
-// Obtenir le libellé de la zone
-const getZoneLabel = (pays: string, ville: string): string => {
-  if (pays === "Burkina Faso") return "🌍 International — Bénin ↔ Burkina Faso";
-  if (pays === "Côte d'Ivoire") return "🌍 International — Bénin ↔ Côte d'Ivoire";
-  if (VILLES_SUD.includes(ville)) return "📍 Zone Sud Bénin";
-  if (VILLES_NORD.includes(ville)) return "📍 Zone Nord Bénin";
-  return "📍 Bénin";
+type GrilleLivraison = {
+  zones: ZoneLivraison[];
+  pays: { nom: string; villes: string[] }[];
 };
 
 // Seuil de basculement paiement avant livraison
@@ -163,13 +135,42 @@ export default function CheckoutScreen() {
   const [isCheckingPromo, setIsCheckingPromo] = useState(false);
 
   const discount = appliedPromo ? appliedPromo.reduction : 0;
+
+  // --- Grille de livraison --------------------------------------------------
+  // Chargée une fois au montage. Sert uniquement à peupler les deux sélecteurs :
+  // le tarif, lui, est demandé au serveur pour la destination choisie.
+  const [grille, setGrille] = useState<GrilleLivraison | null>(null);
+
+  // --- Livraison gratuite méritée ------------------------------------------
+  // Comme pour la remise, rien n'est décidé ici : le serveur dit si le client a
+  // un avantage disponible et où il en est de son cumul. L'écran affiche.
+  const [avantageLivraison, setAvantageLivraison] = useState<{
+    actif: boolean;
+    disponible: boolean;
+    expireLe: string | null;
+    seuil: number;
+    cumul: number;
+    restant: number;
+    fenetreJours: number;
+    fraisNormaux: number | null;
+    zone: string | null;
+  } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [orderConfirmationData, setOrderConfirmationData] = useState<OrderConfirmationData | null>(null);
 
   // Calcul des prix
   const subTotal = getTotalPrice();
-  const shippingCost = getShippingCost(formData.country, formData.city);
+  const livraisonOfferte = Boolean(avantageLivraison?.disponible);
+
+  // Tarif de la destination, tel que le serveur l'a calculé. `null` tant que la
+  // réponse n'est pas arrivée : on affiche alors « … » plutôt qu'un montant
+  // inventé qui serait démenti à la validation.
+  const shippingNormal = avantageLivraison?.fraisNormaux ?? null;
+  const zoneLabel = avantageLivraison?.zone ?? null;
+  const fraisConnus = shippingNormal !== null;
+
+  const shippingCost = livraisonOfferte ? 0 : shippingNormal ?? 0;
   const total = subTotal - discount + shippingCost;
   const isPaiementAvantLivraison = total > SEUIL_PAIEMENT_AVANT_LIVRAISON;
 
@@ -182,6 +183,77 @@ export default function CheckoutScreen() {
       router.replace("/login");
     }
   }, [userToken, isAuthLoading]);
+
+  // Grille des pays et villes livrables. Chargée une seule fois : elle ne change
+  // qu'au rythme des décisions de l'administration, pas de la navigation.
+  useEffect(() => {
+    let annule = false;
+    (async () => {
+      try {
+        const reponse = await fetch(`${API_BASE_URL}/livraison/zones`);
+        if (!reponse.ok) return;
+        const data: GrilleLivraison = await reponse.json();
+        if (annule || !data.pays?.length) return;
+        setGrille(data);
+
+        // Si le pays enregistré dans le profil n'est plus livré (zone
+        // supprimée ou désactivée), on bascule sur le premier pays proposé
+        // plutôt que de laisser un sélecteur pointant dans le vide.
+        setFormData((prev) => {
+          const paysConnu = data.pays.find((p) => p.nom === prev.country);
+          if (paysConnu && paysConnu.villes.includes(prev.city)) return prev;
+          const cible = paysConnu || data.pays[0];
+          return { ...prev, country: cible.nom, city: cible.villes[0] || prev.city };
+        });
+      } catch {
+        /* réseau indisponible : les sélecteurs restent vides, le message le dit */
+      }
+    })();
+    return () => {
+      annule = true;
+    };
+  }, []);
+
+  // Statut de l'avantage ET tarif de la destination, en une seule requête.
+  //
+  // Rechargé quand le panier change (un achat peut faire franchir le seuil) et
+  // quand la destination change (le tarif en dépend). Le tarif vient du serveur
+  // plutôt que d'un calcul local : c'est la seule façon de garantir que le
+  // montant affiché est exactement celui qui sera facturé.
+  useEffect(() => {
+    if (!userToken) return;
+    let annule = false;
+    (async () => {
+      try {
+        const params = new URLSearchParams({
+          pays: formData.country || '',
+          ville: formData.city || '',
+        });
+        const reponse = await fetch(`${API_BASE_URL}/livraison/statut?${params}`, {
+          headers: { Authorization: `Bearer ${userToken}` },
+        });
+        if (!reponse.ok) return;
+        const data = await reponse.json();
+        if (annule) return;
+        setAvantageLivraison({
+          actif: data.actif,
+          disponible: data.avantage_disponible,
+          expireLe: data.expire_le,
+          seuil: data.seuil,
+          cumul: data.cumul_actuel,
+          restant: data.restant,
+          fenetreJours: data.fenetre_jours,
+          fraisNormaux: data.frais_normaux,
+          zone: data.zone,
+        });
+      } catch {
+        /* hors ligne : on garde le dernier tarif connu, le serveur tranchera */
+      }
+    })();
+    return () => {
+      annule = true;
+    };
+  }, [userToken, subTotal, formData.country, formData.city]);
 
   useEffect(() => {
     if (user) {
@@ -204,7 +276,7 @@ export default function CheckoutScreen() {
   };
 
   const handlePaysChange = (pays: string) => {
-    const villes = getVillesByPays(pays);
+    const villes = grille?.pays.find((p) => p.nom === pays)?.villes ?? [];
     setFormData((prev) => ({
       ...prev,
       country: pays,
@@ -259,7 +331,9 @@ const handleSubmitOrder = async () => {
     notes: formData.notes || "",
     currency: "XOF",
     shipping_cost: shippingCost,
-    shipping_method: getZoneLabel(formData.country, formData.city),
+    // Purement indicatif : le serveur réécrit ce champ avec le libellé de la
+    // zone qu'il a lui-même résolue.
+    shipping_method: zoneLabel || "",
     total_amount: total,
     // Seul le code circule : le serveur recalcule la remise. Envoyer le montant
     // reviendrait à laisser l'application fixer son propre prix.
@@ -575,7 +649,7 @@ const handleSubmitOrder = async () => {
               style={{ color: colors.text }}
               dropdownIconColor={colors.subtleText}
             >
-              {PAYS_DISPONIBLES.map((p) => (
+              {(grille?.pays ?? []).map(({ nom: p }) => (
                 <Picker.Item key={p} label={p} value={p} />
               ))}
             </Picker>
@@ -589,7 +663,7 @@ const handleSubmitOrder = async () => {
               style={{ color: colors.text }}
               dropdownIconColor={colors.subtleText}
             >
-              {getVillesByPays(formData.country).map((v) => (
+              {(grille?.pays.find((p) => p.nom === formData.country)?.villes ?? []).map((v) => (
                 <Picker.Item key={v} label={v} value={v} />
               ))}
             </Picker>
@@ -597,12 +671,57 @@ const handleSubmitOrder = async () => {
 
           <View style={[styles.shippingBadge, { backgroundColor: colors.tint + "20", borderColor: colors.tint }]}>
             <Text style={{ color: colors.tint, fontSize: 12, fontWeight: "600" }}>
-              {getZoneLabel(formData.country, formData.city)}
+              {zoneLabel || "Zone de livraison"}
             </Text>
-            <Text style={{ color: colors.tint, fontSize: 16, fontWeight: "700", marginTop: 2 }}>
-              {shippingCost.toLocaleString()} FCFA
-            </Text>
+            {livraisonOfferte ? (
+              // Le prix normal reste affiché, barré : le client doit voir ce que
+              // l'avantage lui rapporte, sinon la gratuité passe inaperçue.
+              <View style={{ flexDirection: "row", alignItems: "center", marginTop: 2 }}>
+                <Text
+                  style={{
+                    color: colors.subtleText,
+                    fontSize: 14,
+                    textDecorationLine: "line-through",
+                    marginRight: 8,
+                  }}
+                >
+                  {(shippingNormal ?? 0).toLocaleString()} FCFA
+                </Text>
+                <Text style={{ color: "#1e7e34", fontSize: 16, fontWeight: "700" }}>
+                  Offerte 🎁
+                </Text>
+              </View>
+            ) : (
+              <Text style={{ color: colors.tint, fontSize: 16, fontWeight: "700", marginTop: 2 }}>
+                {fraisConnus ? `${shippingCost.toLocaleString()} FCFA` : "…"}
+              </Text>
+            )}
           </View>
+
+          {/* Progression vers la livraison gratuite. Affichée seulement quand
+              elle est atteignable : annoncer « encore 98 000 FCFA » à quelqu'un
+              qui vient de commencer découragerait plutôt qu'encourager. */}
+          {avantageLivraison?.actif && !livraisonOfferte && avantageLivraison.cumul > 0 && (
+            <View style={styles.avantageLivraison}>
+              <View style={styles.avantageBarreFond}>
+                <View
+                  style={[
+                    styles.avantageBarreRemplie,
+                    {
+                      width: `${Math.min(
+                        100,
+                        (avantageLivraison.cumul / avantageLivraison.seuil) * 100
+                      )}%`,
+                    },
+                  ]}
+                />
+              </View>
+              <Text style={{ color: colors.subtleText, fontSize: 12, marginTop: 6 }}>
+                Encore {avantageLivraison.restant.toLocaleString("fr-FR")} FCFA d'achats sur{" "}
+                {avantageLivraison.fenetreJours} jours pour offrir votre prochaine livraison.
+              </Text>
+            </View>
+          )}
         </View>
 
         <View style={[styles.grandTotalRow, { borderTopColor: colors.border }]}>
@@ -653,7 +772,7 @@ const handleSubmitOrder = async () => {
           style={{ color: colors.text }}
           dropdownIconColor={colors.subtleText}
         >
-          {PAYS_DISPONIBLES.map((p) => (
+          {(grille?.pays ?? []).map(({ nom: p }) => (
             <Picker.Item key={p} label={p} value={p} />
           ))}
         </Picker>
@@ -668,7 +787,7 @@ const handleSubmitOrder = async () => {
           style={{ color: colors.text }}
           dropdownIconColor={colors.subtleText}
         >
-          {getVillesByPays(formData.country).map((v) => (
+          {(grille?.pays.find((p) => p.nom === formData.country)?.villes ?? []).map((v) => (
             <Picker.Item key={v} label={v} value={v} />
           ))}
         </Picker>
@@ -677,11 +796,17 @@ const handleSubmitOrder = async () => {
       {/* Badge livraison */}
       <View style={[styles.shippingBadge, { backgroundColor: colors.tint + "15", borderColor: colors.tint, marginBottom: 15 }]}>
         <Text style={{ color: colors.tint, fontSize: 13, fontWeight: "600" }}>
-          {getZoneLabel(formData.country, formData.city)}
+          {zoneLabel || "Zone de livraison"}
         </Text>
-        <Text style={{ color: colors.tint, fontSize: 16, fontWeight: "700", marginTop: 2 }}>
-          Frais de livraison : {shippingCost.toLocaleString()} FCFA
-        </Text>
+        {livraisonOfferte ? (
+          <Text style={{ color: "#1e7e34", fontSize: 16, fontWeight: "700", marginTop: 2 }}>
+            🎁 Livraison offerte — {(shippingNormal ?? 0).toLocaleString()} FCFA économisés
+          </Text>
+        ) : (
+          <Text style={{ color: colors.tint, fontSize: 16, fontWeight: "700", marginTop: 2 }}>
+            Frais de livraison : {fraisConnus ? `${shippingCost.toLocaleString()} FCFA` : "…"}
+          </Text>
+        )}
       </View>
 
       <TextInput
@@ -753,10 +878,29 @@ const handleSubmitOrder = async () => {
               <Text style={{ color: colors.subtleText, fontSize: 14 }}>{subTotal.toFixed(2)} FCFA</Text>
             </View>
             <View style={styles.totalRow}>
-              <Text style={{ color: colors.subtleText, fontSize: 14 }}>
-                Livraison ({getZoneLabel(formData.country, formData.city)})
+              <Text
+                style={{
+                  color: livraisonOfferte ? "#4CAF50" : colors.subtleText,
+                  fontSize: 14,
+                  flex: 1,
+                  marginRight: 8,
+                }}
+              >
+                Livraison ({zoneLabel || "zone à confirmer"})
+                {livraisonOfferte ? " — offerte 🎁" : ""}
               </Text>
-              <Text style={{ color: colors.subtleText, fontSize: 14 }}>{shippingCost.toLocaleString()} FCFA</Text>
+              {livraisonOfferte ? (
+                <Text style={{ color: "#4CAF50", fontSize: 14 }}>
+                  <Text style={{ textDecorationLine: "line-through", color: colors.subtleText }}>
+                    {(shippingNormal ?? 0).toLocaleString()}
+                  </Text>{" "}
+                  0 FCFA
+                </Text>
+              ) : (
+                <Text style={{ color: colors.subtleText, fontSize: 14 }}>
+                  {fraisConnus ? `${shippingCost.toLocaleString()} FCFA` : "…"}
+                </Text>
+              )}
             </View>
             {discount > 0 && (
               <View style={styles.totalRow}>
@@ -990,6 +1134,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 8,
     padding: 12,
+  },
+  // Progression vers la livraison gratuite
+  avantageLivraison: {
+    marginTop: 10,
+  },
+  avantageBarreFond: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "rgba(128,128,128,0.25)",
+    overflow: "hidden",
+  },
+  avantageBarreRemplie: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#4CAF50",
   },
   shippingBadge: {
     borderWidth: 1,

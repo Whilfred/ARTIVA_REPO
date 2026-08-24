@@ -44,6 +44,12 @@ services:
       # 06 - codes promotionnels : schéma + codes de démonstration couvrant
       #      chaque règle de validation, y compris celles qui doivent échouer.
       - ./db/init/06_codes_promo.sql:/docker-entrypoint-initdb.d/06_codes_promo.sql:ro
+      # 07 - livraison gratuite méritée : avantages acquis par cumul d'achats
+      #      et réglages (seuil, fenêtre, validité) modifiables depuis le panel.
+      - ./db/init/07_livraison_gratuite.sql:/docker-entrypoint-initdb.d/07_livraison_gratuite.sql:ro
+      # 08 - zones et tarifs de livraison : la grille tarifaire, jusqu'ici codée
+      #      en dur dans le back ET dans l'app, avec les villes de chaque zone.
+      - ./db/init/08_zones_livraison.sql:/docker-entrypoint-initdb.d/08_zones_livraison.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U artiva -d artiva"]
       interval: 5s

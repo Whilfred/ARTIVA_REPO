@@ -208,6 +208,13 @@ function OrderDetailsModal({ isOpen, onClose, orderId, apiBaseUrl, adminToken })
                   {' '}(remise de {Number(orderDetails.discount_amount).toLocaleString('fr-FR')} {orderDetails.currency})
                 </p>
               )}
+              {/* shipping_cost vaut 0 quand la livraison est offerte, ce qui ne dit
+                  pas pourquoi. Sans cette ligne, on pourrait croire à un oubli. */}
+              {orderDetails.free_shipping_applied && (
+                <p style={{ color: '#3730a3' }}>
+                  <strong>Livraison offerte 🚚</strong> — avantage acquis par cumul d'achats
+                </p>
+              )}
             </div>
 
             <div className="order-section">

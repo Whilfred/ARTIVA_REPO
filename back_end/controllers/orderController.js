@@ -1,6 +1,8 @@
 // ARTIVA/back_end/controllers/orderController.js
 const db = require('../config/db');
 const promoController = require('../controllers/promoController');
+const livraisonController = require('../controllers/livraisonController');
+const { resoudreZone } = require('../utils/shipping');
 const { v4: uuidv4 } = require('uuid');
 const { sendNewOrderEmails } = require("../utils/sendEmail.js"); // <-- AJOUT
 
@@ -88,8 +90,32 @@ exports.createOrder = async (req, res) => {
       });
     }
 
-    // ✅ Utiliser shipping_cost envoyé par le frontend (1 500, 2 000, 5 000 ou 7 200)
-    const finalShippingCost = shipping_cost !== undefined ? parseFloat(shipping_cost) : 0;
+    // --- Frais de livraison --------------------------------------------------
+    // Recalculés ici à partir de la destination, et non repris de la requête.
+    // Jusqu'ici le serveur acceptait le montant annoncé par l'application :
+    // « shipping_cost: 0 » suffisait à se faire livrer gratuitement.
+    // Une seule résolution : la zone porte à la fois le tarif et son libellé.
+    // La grille est lue en base (voir db/init/08_zones_livraison.sql), donc un
+    // changement de tarif depuis le panel s'applique à la commande suivante.
+    const zone          = await resoudreZone(client, shipping_address.country, shipping_address.city);
+    const fraisNormaux  = zone.cost;
+    const zoneLivraison = zone.label;
+
+    if (shipping_cost !== undefined && Math.abs(parseFloat(shipping_cost) - fraisNormaux) > 1) {
+      console.warn(
+        `⚠️ Frais annoncés (${shipping_cost}) ≠ grille serveur (${fraisNormaux}) ` +
+        `pour ${shipping_address.city} / ${shipping_address.country} — grille appliquée.`
+      );
+    }
+
+    // --- Livraison gratuite méritée ------------------------------------------
+    // L'avantage est verrouillé (FOR UPDATE) avant d'être appliqué : deux
+    // commandes lancées en même temps ne peuvent pas consommer le même droit.
+    // Il est cherché ici, et non annoncé par l'application, pour la même raison
+    // que les frais eux-mêmes.
+    const avantageLivraison = await livraisonController.avantageDisponible(client, userId, true);
+    const livraisonOfferte  = Boolean(avantageLivraison);
+    const finalShippingCost = livraisonOfferte ? 0 : fraisNormaux;
 
     // --- Code promotionnel ---------------------------------------------------
     // La remise est revalidée ICI, dans la transaction, et jamais reprise de ce
@@ -139,9 +165,10 @@ exports.createOrder = async (req, res) => {
       INSERT INTO orders (
         order_number, user_id, status, total_amount, currency,
         shipping_address, shipping_cost, shipping_method, notes,
-        promo_code, discount_amount
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-      RETURNING id, order_number, status, total_amount, discount_amount, promo_code, created_at;
+        promo_code, discount_amount, free_shipping_applied
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      RETURNING id, order_number, status, total_amount, discount_amount,
+                promo_code, free_shipping_applied, created_at;
     `;
 
     const orderResult = await client.query(orderQuery, [
@@ -152,10 +179,11 @@ exports.createOrder = async (req, res) => {
       finalCurrency,
       JSON.stringify(shipping_address),
       finalShippingCost.toFixed(2),
-      shipping_method || null,
+      zoneLivraison,
       notes || null,
       appliedPromoCode,
-      discountAmount.toFixed(2)
+      discountAmount.toFixed(2),
+      livraisonOfferte
     ]);
 
     const createdOrder = orderResult.rows[0];
@@ -172,6 +200,23 @@ exports.createOrder = async (req, res) => {
         'UPDATE promo_codes SET used_count = used_count + 1 WHERE id = $1',
         [appliedPromo.id]
       );
+    }
+
+    // Consommer l'avantage livraison. Le UPDATE est conditionné à un avantage
+    // encore libre : s'il ne modifie aucune ligne, deux commandes ont couru
+    // ensemble et la nôtre doit échouer plutôt que d'offrir une seconde fois
+    // un droit déjà dépensé.
+    if (avantageLivraison) {
+      const consomme = await livraisonController.consommerAvantage(
+        client, avantageLivraison.id, createdOrder.id, fraisNormaux
+      );
+      if (!consomme) {
+        const err = new Error(
+          'Votre livraison gratuite vient d\'être utilisée sur une autre commande. Veuillez réessayer.'
+        );
+        err.statusCode = 409;
+        throw err;
+      }
     }
 
     // 3. Insérer les items
@@ -222,6 +267,32 @@ exports.createOrder = async (req, res) => {
       ]
     );
 
+    // 5 bis. La commande vient-elle de faire franchir le seuil de livraison
+    // gratuite ? Évalué après l'insertion, pour que la commande en cours entre
+    // elle-même dans le cumul, et dans la transaction pour qu'un échec plus
+    // loin n'accorde pas un avantage sur une commande qui n'existera pas.
+    let avantageGagne = null;
+    try {
+      avantageGagne = await livraisonController.evaluerGain(client, userId, createdOrder.id);
+      if (avantageGagne) {
+        await client.query(
+          `INSERT INTO notifications (user_id, type, title, message, link_url)
+           VALUES ($1, 'free_shipping_earned', $2, $3, $4)`,
+          [
+            userId,
+            'Livraison gratuite débloquée ! 🎁',
+            `Vos achats des derniers jours vous offrent la livraison sur votre prochaine commande, `
+              + `jusqu'au ${new Date(avantageGagne.expires_at).toLocaleDateString('fr-FR')}.`,
+            '/orders'
+          ]
+        );
+      }
+    } catch (avantageError) {
+      // Un échec ici ne doit pas faire perdre la commande au client : elle est
+      // payée et valide. L'avantage manqué se rattrape, une commande perdue non.
+      console.error('Erreur évaluation livraison gratuite:', avantageError);
+    }
+
     // 6. ENVOI DES EMAILS
     try {
       const adminEmail = process.env.ADMIN_EMAIL || "artiva.app@gmail.com";
@@ -241,6 +312,13 @@ exports.createOrder = async (req, res) => {
         shipping_cost: finalShippingCost,
         promo_code: appliedPromoCode,
         discount_amount: discountAmount,
+        // Livraison offerte : shipping_cost vaut 0, ce qui ne dit pas POURQUOI.
+        // Sans ces deux champs, l'email laisserait croire à un oubli de frais.
+        free_shipping_applied: livraisonOfferte,
+        shipping_normal: fraisNormaux,
+        free_shipping_earned: avantageGagne
+          ? { expires_at: avantageGagne.expires_at, amount: avantageGagne.qualifying_amount }
+          : null,
       });
     } catch (emailError) {
       console.error("Erreur envoi email:", emailError);
@@ -249,7 +327,11 @@ exports.createOrder = async (req, res) => {
 
     await client.query('COMMIT');
 
-    console.log(`✅ Commande créée: ${createdOrder.order_number} | Status: ${orderStatus} | Livraison: ${finalShippingCost} FCFA`);
+    console.log(
+      `✅ Commande créée: ${createdOrder.order_number} | Status: ${orderStatus} | ` +
+      `Livraison: ${finalShippingCost} FCFA${livraisonOfferte ? ` (offerte, valeur ${fraisNormaux})` : ''}` +
+      `${avantageGagne ? ' | 🎁 avantage livraison acquis' : ''}`
+    );
 
     res.status(201).json({
       message: "Commande créée avec succès !",
@@ -324,7 +406,7 @@ exports.getAllOrdersAdmin = async (req, res) => {
       o.id as "orderId", o.order_number, o.user_id, u.name as "userName", u.email as "userEmail",
       o.status, o.total_amount as total, o.currency, 
       o.shipping_address, o.billing_address, o.notes,
-      o.promo_code, o.discount_amount,
+      o.promo_code, o.discount_amount, o.free_shipping_applied,
       o.created_at as "createdAt", o.updated_at as "updatedAt",
       COUNT(*) OVER() AS total_count -- Compte total pour la pagination
     FROM orders o
@@ -393,7 +475,7 @@ exports.getOrderDetailsAdmin = async (req, res) => {
         o.status, o.total_amount as total, o.currency, 
         o.shipping_address, o.billing_address, o.notes,
         o.shipping_method, o.shipping_cost,
-        o.promo_code, o.discount_amount,
+        o.promo_code, o.discount_amount, o.free_shipping_applied,
         o.created_at as "createdAt", o.updated_at as "updatedAt"
       FROM orders o
       LEFT JOIN users u ON o.user_id = u.id
