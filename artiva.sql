@@ -404,4 +404,443 @@ CREATE INDEX IF NOT EXISTS idx_payments_transaction_id ON payments(transaction_i
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_type ON notifications(type);
 
+-- #############################################################################
+-- #                                                                           #
+-- #   CODES PROMOTIONNELS  ·  LIVRAISON GRATUITE  ·  ZONES DE LIVRAISON       #
+-- #                                                                           #
+-- #############################################################################
+--
+-- Ces tables étaient à l'origine dans des fichiers séparés (db/init/06 à 08),
+-- exécutés après ce schéma. Elles sont reportées ici pour une raison précise :
+-- db/init/ ne s'exécute QU'À la création d'une base vierge. Une installation
+-- faite à partir de ce seul fichier — c'est ainsi que la production a été
+-- montée — se serait retrouvée sans aucune de ces tables.
+--
+-- C'est exactement ce qui était arrivé à `password_reset_codes` et `avis`,
+-- utilisées par le code mais jamais reportées ici, puis créées à la main en
+-- production. On ne recommence pas.
+--
+-- Les données de démonstration, elles, restent dans db/init/ : elles n'ont
+-- rien à faire dans une base de production.
+-- #############################################################################
+
+-- =============================================================================
+-- 06 — Codes promotionnels
+-- =============================================================================
+-- Deux tables : la définition des codes, et le journal de leurs utilisations.
+--
+-- Le journal n'est pas un luxe. Sans lui, on ne peut ni limiter un code à une
+-- utilisation par client, ni savoir quelle commande a bénéficié de quel code
+-- lorsqu'il faut expliquer un écart de caisse. Un simple compteur ne dirait pas
+-- QUI a utilisé le code.
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS promo_codes (
+  id                  SERIAL PRIMARY KEY,
+
+  -- Toujours stocké en majuscules : « ETE2026 » et « ete2026 » désignent le
+  -- même code. La normalisation se fait à l'écriture, pas à la lecture, pour
+  -- que l'index unique fasse son travail.
+  code                VARCHAR(50)  NOT NULL UNIQUE,
+  description         TEXT,
+
+  -- 'percentage' : discount_value est un pourcentage (10 = -10 %)
+  -- 'fixed'      : discount_value est un montant en FCFA
+  discount_type       VARCHAR(20)  NOT NULL,
+  discount_value      NUMERIC(12,2) NOT NULL,
+
+  -- Plafond de réduction, utile pour les pourcentages : « -20 %, au maximum
+  -- 5 000 FCFA ». Sans plafond, une remise en pourcentage sur un gros panier
+  -- peut coûter beaucoup plus que prévu.
+  max_discount_amount NUMERIC(12,2),
+
+  -- Montant minimum d'achat (hors livraison) pour que le code s'applique.
+  min_purchase_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+
+  -- Fenêtre de validité. NULL = pas de borne de ce côté.
+  starts_at           TIMESTAMPTZ,
+  expires_at          TIMESTAMPTZ,
+
+  -- Deux limites indépendantes, toutes deux facultatives (NULL = illimité) :
+  --   max_uses          : nombre total d'utilisations, tous clients confondus
+  --   max_uses_per_user : nombre d'utilisations par client
+  -- Un code de lancement à 100 usages n'a pas les mêmes règles qu'un code de
+  -- bienvenue utilisable une seule fois par personne.
+  max_uses            INTEGER,
+  max_uses_per_user   INTEGER,
+
+  -- Dénormalisation assumée : le compte se déduirait de promo_code_usages,
+  -- mais la validation d'un code doit être rapide et se fait à chaque frappe
+  -- du client. Mis à jour dans la même transaction que la commande.
+  used_count          INTEGER      NOT NULL DEFAULT 0,
+
+  is_active           BOOLEAN      NOT NULL DEFAULT TRUE,
+  created_at          TIMESTAMPTZ  DEFAULT CURRENT_TIMESTAMP,
+  updated_at          TIMESTAMPTZ  DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT promo_codes_type_check
+    CHECK (discount_type IN ('percentage','fixed')),
+  CONSTRAINT promo_codes_value_check
+    CHECK (discount_value > 0),
+  -- Un pourcentage au-delà de 100 n'a pas de sens ; la base refuse la saisie
+  -- plutôt que de compter sur le panel admin pour l'empêcher.
+  CONSTRAINT promo_codes_percentage_check
+    CHECK (discount_type <> 'percentage' OR discount_value <= 100),
+  CONSTRAINT promo_codes_dates_check
+    CHECK (starts_at IS NULL OR expires_at IS NULL OR expires_at > starts_at),
+  CONSTRAINT promo_codes_min_purchase_check
+    CHECK (min_purchase_amount >= 0),
+  CONSTRAINT promo_codes_max_uses_check
+    CHECK (max_uses IS NULL OR max_uses > 0),
+  CONSTRAINT promo_codes_max_uses_per_user_check
+    CHECK (max_uses_per_user IS NULL OR max_uses_per_user > 0)
+);
+
+CREATE INDEX IF NOT EXISTS idx_promo_codes_code      ON promo_codes(code);
+CREATE INDEX IF NOT EXISTS idx_promo_codes_is_active ON promo_codes(is_active);
+
+DROP TRIGGER IF EXISTS trigger_promo_codes_updated_at ON promo_codes;
+CREATE TRIGGER trigger_promo_codes_updated_at
+  BEFORE UPDATE ON promo_codes
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+
+-- -----------------------------------------------------------------------------
+-- Journal des utilisations
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS promo_code_usages (
+  id              SERIAL PRIMARY KEY,
+  promo_code_id   INTEGER NOT NULL REFERENCES promo_codes(id) ON DELETE CASCADE,
+  user_id         INTEGER NOT NULL REFERENCES users(id)       ON DELETE CASCADE,
+
+  -- Si la commande est supprimée, l'utilisation reste tracée (order_id à NULL)
+  -- plutôt que de disparaître : on veut garder l'historique du code.
+  order_id        INTEGER REFERENCES orders(id) ON DELETE SET NULL,
+
+  -- Montant réellement déduit. Recalculer à partir du code ne donnerait pas le
+  -- même résultat si le code a été modifié depuis.
+  discount_amount NUMERIC(12,2) NOT NULL,
+  used_at         TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT promo_code_usages_amount_check CHECK (discount_amount >= 0)
+);
+
+CREATE INDEX IF NOT EXISTS idx_promo_usages_code_user ON promo_code_usages(promo_code_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_promo_usages_order     ON promo_code_usages(order_id);
+
+
+-- -----------------------------------------------------------------------------
+-- Trace sur la commande
+-- -----------------------------------------------------------------------------
+-- Le code est recopié en clair, et non référencé par son identifiant : une
+-- commande passée doit rester lisible même si le code est supprimé plus tard.
+-- C'est la même logique que order_items, qui recopie déjà le nom du produit.
+-- -----------------------------------------------------------------------------
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS promo_code      VARCHAR(50);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'orders_discount_amount_check'
+  ) THEN
+    ALTER TABLE orders ADD CONSTRAINT orders_discount_amount_check
+      CHECK (discount_amount >= 0);
+  END IF;
+END $$;
+
+
+-- =============================================================================
+-- 07 — Livraison gratuite méritée
+-- =============================================================================
+-- Règle : dès que les achats d'un client cumulent 100 000 FCFA sur une fenêtre
+-- de 7 jours glissants, il gagne la livraison gratuite sur sa PROCHAINE
+-- commande. L'avantage expire 30 jours après avoir été gagné.
+--
+-- Contrairement à un simple seuil par commande, l'avantage se GAGNE à un
+-- moment et se CONSOMME à un autre. Il lui faut donc une existence propre en
+-- base : sans cela, impossible de dire à un client pourquoi il n'a plus sa
+-- livraison gratuite, ni de justifier un écart de caisse.
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS free_shipping_rewards (
+  id                  SERIAL PRIMARY KEY,
+  user_id             INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+
+  earned_at           TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at          TIMESTAMPTZ NOT NULL,
+
+  -- Cumul qui a déclenché l'avantage. Conservé tel quel : recalculer plus tard
+  -- ne donnerait pas le même chiffre si une commande est annulée entre-temps.
+  qualifying_amount   NUMERIC(12,2) NOT NULL,
+
+  -- Commande qui a fait franchir le seuil. Utile au service client : « c'est
+  -- votre commande ART-2026-0042 qui vous a ouvert ce droit ».
+  triggering_order_id INTEGER REFERENCES orders(id) ON DELETE SET NULL,
+
+  -- Consommation. NULL tant que l'avantage n'a pas servi.
+  used_at             TIMESTAMPTZ,
+  used_order_id       INTEGER REFERENCES orders(id) ON DELETE SET NULL,
+
+  -- Ce que la gratuité a réellement coûté : 1 500 FCFA vers Cotonou, 7 200 vers
+  -- Abidjan. Le même avantage n'a pas le même prix, il faut pouvoir l'additionner.
+  shipping_saved      NUMERIC(12,2),
+
+  created_at          TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT free_shipping_expiry_check
+    CHECK (expires_at > earned_at),
+  CONSTRAINT free_shipping_amount_check
+    CHECK (qualifying_amount >= 0),
+  -- used_at et used_order_id vont toujours ensemble : un avantage consommé
+  -- sans commande associée serait une trace inexploitable.
+  CONSTRAINT free_shipping_usage_check
+    CHECK ((used_at IS NULL AND used_order_id IS NULL)
+        OR (used_at IS NOT NULL AND used_order_id IS NOT NULL))
+);
+
+-- Index partiel : la question posée à chaque passage en caisse est « ce client
+-- a-t-il un avantage encore disponible ? ». Seules les lignes non consommées
+-- sont concernées, inutile d'indexer les autres.
+CREATE INDEX IF NOT EXISTS idx_free_shipping_disponible
+  ON free_shipping_rewards(user_id, expires_at)
+  WHERE used_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_free_shipping_user ON free_shipping_rewards(user_id);
+
+
+-- -----------------------------------------------------------------------------
+-- Traces sur la commande
+-- -----------------------------------------------------------------------------
+
+-- Une commande déjà comptée dans un avantage acquis ne doit plus jamais l'être.
+-- Sans cela, un client ayant atteint 100 000 FCFA gagnerait un nouvel avantage
+-- à CHAQUE commande suivante tant que la fenêtre de 7 jours reste au-dessus du
+-- seuil. Le compteur repart donc de zéro à chaque gain.
+--
+-- On stocke l'identifiant de l'avantage plutôt qu'un simple booléen : cela
+-- répond en plus à « sur quelles commandes ce droit a-t-il été ouvert ? »,
+-- indispensable pour révoquer un avantage dont une commande a été annulée.
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS counted_in_reward_id INTEGER
+  REFERENCES free_shipping_rewards(id) ON DELETE SET NULL;
+
+-- La commande a-t-elle bénéficié de la gratuité ? shipping_cost vaut 0 dans ce
+-- cas, ce qui ne permet pas de distinguer « livraison offerte » de « retrait
+-- sur place » ou d'une erreur de saisie.
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS free_shipping_applied BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- La question posée à chaque commande est « qu'a dépensé ce client, hors
+-- montants déjà récompensés, depuis N jours ? ». L'index ne porte donc que sur
+-- les commandes encore comptabilisables.
+CREATE INDEX IF NOT EXISTS idx_orders_non_comptees
+  ON orders(user_id, created_at)
+  WHERE counted_in_reward_id IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_orders_reward ON orders(counted_in_reward_id);
+
+
+-- =============================================================================
+-- Paramètres modifiables depuis le panel d'administration
+-- =============================================================================
+-- Le seuil, la fenêtre et la durée de validité sont des décisions commerciales,
+-- pas des constantes techniques : elles doivent pouvoir changer sans nouvelle
+-- version de l'application. Une opération de fin d'année peut vouloir descendre
+-- le seuil à 60 000 FCFA pendant deux semaines.
+--
+-- Table à ligne unique (id figé à 1) plutôt qu'un magasin clé/valeur : chaque
+-- réglage garde ainsi son type et ses contraintes. Un seuil négatif ou une
+-- fenêtre de zéro jour sont refusés par la base, pas seulement par le panel.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS free_shipping_settings (
+  id               INTEGER PRIMARY KEY DEFAULT 1,
+
+  -- Interrupteur général : coupe l'acquisition de nouveaux avantages.
+  -- Les avantages déjà gagnés restent honorés, voir plus bas.
+  is_active        BOOLEAN       NOT NULL DEFAULT TRUE,
+
+  threshold_amount NUMERIC(12,2) NOT NULL DEFAULT 100000,  -- cumul à atteindre
+  window_days      INTEGER       NOT NULL DEFAULT 7,       -- fenêtre glissante
+  validity_days    INTEGER       NOT NULL DEFAULT 30,      -- durée de l'avantage
+
+  updated_at       TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT free_shipping_settings_singleton    CHECK (id = 1),
+  CONSTRAINT free_shipping_settings_threshold    CHECK (threshold_amount > 0),
+  CONSTRAINT free_shipping_settings_window       CHECK (window_days BETWEEN 1 AND 365),
+  CONSTRAINT free_shipping_settings_validity     CHECK (validity_days BETWEEN 1 AND 365)
+);
+
+INSERT INTO free_shipping_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+
+DROP TRIGGER IF EXISTS trigger_free_shipping_settings_updated_at ON free_shipping_settings;
+CREATE TRIGGER trigger_free_shipping_settings_updated_at
+  BEFORE UPDATE ON free_shipping_settings
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Note importante sur les changements de réglages
+-- -----------------------------------------------
+-- expires_at est calculé et STOCKÉ au moment du gain, il n'est jamais recalculé
+-- à partir de validity_days. Raccourcir la validité de 30 à 15 jours ne
+-- raccourcit donc pas les avantages déjà promis : on ne reprend pas un droit
+-- déjà accordé à un client. Le nouveau réglage ne vaut que pour les gains à venir.
+
+
+-- =============================================================================
+-- 08 — Zones et tarifs de livraison
+-- =============================================================================
+-- La grille tarifaire vivait en dur dans DEUX fichiers : back_end/utils/shipping.js
+-- pour la facturation et front_end/app/checkout.tsx pour l'affichage. Changer le
+-- tarif d'Abidjan demandait de modifier les deux, et un oubli affichait au client
+-- un prix différent de celui facturé.
+--
+-- La grille vit désormais ici. Les deux côtés la lisent, le panel la modifie.
+-- =============================================================================
+
+-- -----------------------------------------------------------------------------
+-- Normalisation des noms de ville
+-- -----------------------------------------------------------------------------
+-- « Cotonou », « cotonou » et « COTONOU  » désignent la même ville, et
+-- « Sèmè-Kpodji » doit se retrouver même tapé « Seme-Kpodji ». Sans cela, une
+-- faute d'accent ferait basculer un client du tarif Sud (1 500) au tarif par
+-- défaut (2 000).
+--
+-- La fonction est déclarée IMMUTABLE pour pouvoir alimenter une colonne générée :
+-- la forme normalisée est ainsi calculée par la base elle-même, jamais par
+-- l'application. Impossible que les deux divergent.
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION normaliser_libelle(valeur TEXT)
+RETURNS TEXT AS $$
+  SELECT lower(
+    translate(
+      btrim(COALESCE(valeur, '')),
+      'àáâãäåçèéêëìíîïñòóôõöùúûüýÿÀÁÂÃÄÅÇÈÉÊËÌÍÎÏÑÒÓÔÕÖÙÚÛÜÝ',
+      'aaaaaaceeeeiiiinooooouuuuyyAAAAAACEEEEIIIINOOOOOUUUUY'
+    )
+  );
+$$ LANGUAGE SQL IMMUTABLE;
+
+
+-- -----------------------------------------------------------------------------
+-- Zones
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS shipping_zones (
+  id            SERIAL PRIMARY KEY,
+
+  name          VARCHAR(100)  NOT NULL,   -- « Sud Bénin », usage interne
+  label         VARCHAR(150)  NOT NULL,   -- « 📍 Zone Sud Bénin », montré au client
+  country       VARCHAR(100)  NOT NULL,
+  cost          NUMERIC(12,2) NOT NULL,
+
+  -- Tarif appliqué aux villes de ce pays qui ne sont listées dans aucune zone.
+  -- C'est ce qui permet au Burkina Faso d'avoir un tarif unique quelle que soit
+  -- la ville, sans avoir à énumérer toutes les villes du pays.
+  is_country_default BOOLEAN NOT NULL DEFAULT FALSE,
+
+  -- Dernier recours, quand même le pays est inconnu. Mieux vaut surfacturer
+  -- légèrement que livrer gratuitement par accident.
+  is_global_fallback BOOLEAN NOT NULL DEFAULT FALSE,
+
+  is_active     BOOLEAN NOT NULL DEFAULT TRUE,
+  sort_order    INTEGER NOT NULL DEFAULT 0,
+
+  created_at    TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at    TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT shipping_zones_cost_check CHECK (cost >= 0),
+  CONSTRAINT shipping_zones_name_check CHECK (btrim(name) <> ''),
+  -- Une zone de repli désactivée ne remplit plus son rôle et laisserait le
+  -- calcul sans solution. La base refuse la combinaison.
+  CONSTRAINT shipping_zones_fallback_actif
+    CHECK (NOT (is_global_fallback AND NOT is_active))
+);
+
+-- Un seul tarif par défaut par pays, et un seul repli global : sans ces index,
+-- deux lignes concurrentes rendraient le calcul non déterministe.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_zones_defaut_pays
+  ON shipping_zones (normaliser_libelle(country))
+  WHERE is_country_default;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_zones_repli_global
+  ON shipping_zones ((TRUE))
+  WHERE is_global_fallback;
+
+CREATE INDEX IF NOT EXISTS idx_zones_pays
+  ON shipping_zones (normaliser_libelle(country));
+
+DROP TRIGGER IF EXISTS trigger_shipping_zones_updated_at ON shipping_zones;
+CREATE TRIGGER trigger_shipping_zones_updated_at
+  BEFORE UPDATE ON shipping_zones
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+
+-- -----------------------------------------------------------------------------
+-- Villes rattachées aux zones
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS shipping_zone_cities (
+  id       SERIAL PRIMARY KEY,
+  zone_id  INTEGER NOT NULL REFERENCES shipping_zones(id) ON DELETE CASCADE,
+  city     VARCHAR(120) NOT NULL,
+
+  -- Colonne générée : la base calcule elle-même la forme normalisée, à
+  -- l'insertion comme à la mise à jour. L'application ne peut pas se tromper.
+  city_normalized VARCHAR(160)
+    GENERATED ALWAYS AS (normaliser_libelle(city)) STORED,
+
+  CONSTRAINT shipping_zone_cities_nom_check CHECK (btrim(city) <> '')
+);
+
+-- Une même ville ne peut pas appartenir à deux zones : le tarif serait ambigu.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_zone_cities_unique
+  ON shipping_zone_cities (city_normalized);
+
+CREATE INDEX IF NOT EXISTS idx_zone_cities_zone ON shipping_zone_cities (zone_id);
+
+
+-- =============================================================================
+-- Grille actuelle, reprise à l'identique
+-- =============================================================================
+-- Ces valeurs reproduisent exactement le comportement d'avant : Sud Bénin
+-- 1 500, Nord Bénin 2 000, Burkina 5 000, Côte d'Ivoire 7 200, et 2 000 pour
+-- toute destination non reconnue.
+-- =============================================================================
+
+INSERT INTO shipping_zones (name, label, country, cost, is_country_default, is_global_fallback, sort_order)
+SELECT * FROM (VALUES
+  ('Sud Bénin',    '📍 Zone Sud Bénin',                        'Bénin',         1500.00, FALSE, FALSE, 1),
+  ('Nord Bénin',   '📍 Zone Nord Bénin',                       'Bénin',         2000.00, TRUE,  TRUE,  2),
+  ('Burkina Faso', '🌍 International — Bénin ↔ Burkina Faso',  'Burkina Faso',  5000.00, TRUE,  FALSE, 3),
+  ('Côte d''Ivoire','🌍 International — Bénin ↔ Côte d''Ivoire','Côte d''Ivoire',7200.00, TRUE,  FALSE, 4)
+) AS v(name, label, country, cost, is_country_default, is_global_fallback, sort_order)
+WHERE NOT EXISTS (SELECT 1 FROM shipping_zones);
+
+-- Villes, rattachées par le nom de leur zone pour ne pas dépendre des
+-- identifiants attribués par la séquence.
+INSERT INTO shipping_zone_cities (zone_id, city)
+SELECT z.id, v.ville
+FROM (VALUES
+  ('Sud Bénin', 'Cotonou'), ('Sud Bénin', 'Porto-Novo'), ('Sud Bénin', 'Abomey-Calavi'),
+  ('Sud Bénin', 'Sèmè-Kpodji'), ('Sud Bénin', 'Ouidah'), ('Sud Bénin', 'Allada'),
+  ('Sud Bénin', 'Lokossa'), ('Sud Bénin', 'Dogbo'), ('Sud Bénin', 'Grand-Popo'),
+  ('Sud Bénin', 'Sakété'), ('Sud Bénin', 'Kétou'),
+
+  ('Nord Bénin', 'Parakou'), ('Nord Bénin', 'Djougou'), ('Nord Bénin', 'Kandi'),
+  ('Nord Bénin', 'Natitingou'), ('Nord Bénin', 'Bohicon'), ('Nord Bénin', 'Abomey'),
+  ('Nord Bénin', 'Savalou'), ('Nord Bénin', 'Dassa-Zoumé'), ('Nord Bénin', 'Nikki'),
+  ('Nord Bénin', 'Tanguiéta'), ('Nord Bénin', 'Malanville'), ('Nord Bénin', 'Banikoara'),
+
+  ('Burkina Faso', 'Ouagadougou'), ('Burkina Faso', 'Bobo-Dioulasso'),
+  ('Burkina Faso', 'Koudougou'), ('Burkina Faso', 'Ouahigouya'), ('Burkina Faso', 'Kaya'),
+  ('Burkina Faso', 'Banfora'), ('Burkina Faso', 'Fada N''Gourma'),
+
+  ('Côte d''Ivoire', 'Abidjan'), ('Côte d''Ivoire', 'Yamoussoukro'),
+  ('Côte d''Ivoire', 'Bouaké'), ('Côte d''Ivoire', 'San-Pédro'),
+  ('Côte d''Ivoire', 'Korhogo'), ('Côte d''Ivoire', 'Daloa')
+) AS v(zone, ville)
+JOIN shipping_zones z ON z.name = v.zone
+WHERE NOT EXISTS (
+  SELECT 1 FROM shipping_zone_cities c
+   WHERE c.city_normalized = normaliser_libelle(v.ville)
+);
+
+
 -- Fin du script
