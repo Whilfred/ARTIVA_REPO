@@ -90,9 +90,13 @@ function resolveLocalHost(): string {
  * EXPO_PUBLIC_API_BASE_URL (dans front_end/.env), utile par exemple pour tester
  * l'app locale contre le serveur de production.
  */
-export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_BASE_URL ??
-  `http://${resolveLocalHost()}:${LOCAL_API_PORT}/api`;
+// export const API_BASE_URL =
+//   process.env.EXPO_PUBLIC_API_BASE_URL ??
+//   `http://${resolveLocalHost()}:${LOCAL_API_PORT}/api`;
+// -----------------------------------------------------------------------------
+// PRODUCTION
+// -----------------------------------------------------------------------------
+export const API_BASE_URL = "https://artiva-service.onrender.com/api";
 
 // Affiché au démarrage : permet de vérifier d'un coup d'œil, dans les logs Metro,
 // sur quel serveur l'application est branchée.
