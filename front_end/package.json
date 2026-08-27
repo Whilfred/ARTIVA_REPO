@@ -49,6 +49,8 @@
   },
   "devDependencies": {
     "@babel/core": "^7.26.0",
+    "@react-native-community/cli": "^20.2.0",
+    "@react-native/metro-config": "^0.87.1",
     "@types/react": "~19.2.4",
     "babel-preset-expo": "~57.0.0",
     "dotenv": "^17.4.2",
