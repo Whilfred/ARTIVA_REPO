@@ -7,6 +7,9 @@
       "android": {
         "buildType": "app-bundle",
         "autoIncrement": false
+      },
+      "env": {
+        "NPM_CONFIG_LEGACY_PEER_DEPS": "true"
       }
     },
     "development": {
