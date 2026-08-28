@@ -1,10 +1,11 @@
 const cron = require('node-cron');
 
 function startCampaignScheduler() {
-    cron.schedule('0 8 * * *', async () => {
-        console.log('[Scheduler] Exécution de la tâche planifiée...');
-        // Votre logique ici
-    });
+// S'exécute toutes les minutes ('* * * * *')
+cron.schedule('* * * * *', async () => {
+    console.log('[Scheduler] Vérification des campagnes à envoyer...');
+    // Votre logique pour chercher les campagnes dont scheduled_at <= maintenant
+});
     console.log('[Scheduler] Planificateur de campagnes démarré avec succès.');
 }
 
