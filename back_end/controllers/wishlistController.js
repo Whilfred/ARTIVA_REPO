@@ -1,5 +1,6 @@
 // ARTIVA/back_end/controllers/wishlistController.js
 const db = require('../config/db');
+const { sendWishlistRestockEmail } = require('../utils/sendEmail.js');
 
 // Récupérer la liste de souhaits de l'utilisateur connecté
 exports.getWishlist = async (req, res) => {
@@ -91,5 +92,33 @@ exports.removeFromWishlist = async (req, res) => {
   } catch (error) {
     console.error('Erreur suppression de la wishlist:', error);
     res.status(500).json({ message: 'Erreur serveur lors de la suppression de la liste de souhaits.' });
+  }
+};
+
+// --- NOUVEAU : notifier les utilisateurs ayant ce produit en wishlist qu'il est de retour en stock ---
+// À appeler depuis productController.js, juste après un UPDATE qui fait
+// passer le stock de 0 (ou moins) à un nombre positif. Ne fait rien si
+// le produit n'est dans aucune wishlist.
+exports.notifyWishlistUsersOnRestock = async (productId, client) => {
+  const db_or_client = client || db;
+  try {
+    const query = `
+      SELECT u.email, u.name, p.name AS product_name, p.price
+      FROM wishlist_items wi
+      JOIN users u ON u.id = wi.user_id
+      JOIN products p ON p.id = wi.product_id
+      WHERE wi.product_id = $1;
+    `;
+    const { rows } = await db_or_client.query(query, [productId]);
+
+    for (const row of rows) {
+      try {
+        await sendWishlistRestockEmail(row.email, [{ name: row.product_name, price: row.price }]);
+      } catch (emailError) {
+        console.error(`Erreur envoi email restock wishlist à ${row.email}:`, emailError);
+      }
+    }
+  } catch (error) {
+    console.error('Erreur notification wishlist restock:', error);
   }
 };

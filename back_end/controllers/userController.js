@@ -2,6 +2,7 @@
 const db = require('../config/db');
 // bcrypt sera nécessaire si on permet à l'admin de réinitialiser un mot de passe (non recommandé directement)
 const bcrypt = require('bcryptjs'); 
+const { sendPasswordChangedEmail } = require("../utils/sendEmail.js");
 
 // --- Récupérer le profil de l'utilisateur actuellement connecté ---
 exports.getCurrentUserProfile = async (req, res) => {
@@ -269,7 +270,7 @@ exports.deactivateMyAccount = async (req, res) => {
 // AJOUTER CETTE FONCTION DANS userController.js si elle manque :
 exports.changePassword = async (req, res) => {
   const userId = req.user.id;
-  const userRole = req.user.role; // Pour savoir quelle table interroger (users ou admin)
+  const userRole = req.user.role;
   const { currentPassword, newPassword, confirmNewPassword } = req.body;
 
   if (!currentPassword || !newPassword || !confirmNewPassword) {
@@ -278,7 +279,7 @@ exports.changePassword = async (req, res) => {
   if (newPassword !== confirmNewPassword) {
     return res.status(400).json({ message: 'Le nouveau mot de passe et sa confirmation ne correspondent pas.' });
   }
-  if (newPassword.length < 6) { 
+  if (newPassword.length < 6) {
     return res.status(400).json({ message: 'Le nouveau mot de passe doit contenir au moins 6 caractères.' });
   }
   if (newPassword === currentPassword) {
@@ -286,10 +287,15 @@ exports.changePassword = async (req, res) => {
   }
 
   let userRecord;
-  let tableName = userRole === 'admin' || userRole === 'super_admin' ? 'admin' : 'users';
+  const tableName = userRole === 'admin' || userRole === 'super_admin' ? 'admin' : 'users';
 
   try {
-    const userResult = await db.query(`SELECT id, password_hash FROM ${tableName} WHERE id = $1`, [userId]);
+    // On récupère aussi email/name ici pour l'email de confirmation, sans
+    // requête supplémentaire.
+    const userResult = await db.query(
+      `SELECT id, password_hash, email, name FROM ${tableName} WHERE id = $1`,
+      [userId]
+    );
     if (userResult.rows.length === 0) {
       return res.status(404).json({ message: 'Utilisateur non trouvé.' });
     }
@@ -303,7 +309,6 @@ exports.changePassword = async (req, res) => {
     const saltRounds = parseInt(process.env.PASSWORD_SALT_ROUNDS || '10');
     const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
 
-    // Assure-toi que tes tables users et admin ont bien updated_at
     const updatePasswordQuery = `
       UPDATE ${tableName} 
       SET password_hash = $1, updated_at = CURRENT_TIMESTAMP 
@@ -312,6 +317,16 @@ exports.changePassword = async (req, res) => {
     await db.query(updatePasswordQuery, [hashedNewPassword, userId]);
 
     res.status(200).json({ message: 'Mot de passe mis à jour avec succès !' });
+
+    // Envoyé APRÈS la réponse : l'utilisateur n'attend pas l'email pour avoir
+    // confirmation que son changement a réussi.
+    try {
+      if (userRecord.email) {
+        await sendPasswordChangedEmail(userRecord.email, userRecord.name);
+      }
+    } catch (emailError) {
+      console.error('Erreur envoi email confirmation mot de passe:', emailError);
+    }
 
   } catch (error) {
     console.error('Erreur lors du changement de mot de passe:', error);

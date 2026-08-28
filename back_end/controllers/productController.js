@@ -1,5 +1,6 @@
 // ARTIVA/back_end/controllers/productController.js
 const db = require("../config/db");
+const wishlistController = require("./wishlistController");
 
 // --- Créer un nouveau produit (Admin) ---
 exports.createProduct = async (req, res) => {
@@ -162,7 +163,6 @@ exports.getAllProducts = async (req, res) => {
       finalQuery += " ORDER BY p.created_at DESC";
     }
 
-    // COUNT
     let countQuery = `SELECT COUNT(DISTINCT p.id) FROM products p ${joinClauses}`;
     if (whereClauses.length > 0) {
       countQuery += ` WHERE ${whereClauses.join(' AND ')}`;
@@ -170,7 +170,6 @@ exports.getAllProducts = async (req, res) => {
     const countResult = await db.query(countQuery, queryParams.slice(0, paramIndex - 1));
     const totalItems = parseInt(countResult.rows[0].count, 10);
 
-    // ✅ Pas de LIMIT forcé si non fourni = tous les produits
     const parsedLimit = limit ? parseInt(limit, 10) : null;
     const totalPages = parsedLimit ? Math.ceil(totalItems / parsedLimit) : 1;
 
@@ -290,11 +289,14 @@ exports.updateProduct = async (req, res) => {
     if (isNaN(parsedPrice) || parsedPrice < 0) return res.status(400).json({ message: 'Prix invalide.' });
     fields.push(`price = $${paramIndex++}`); values.push(parsedPrice);
   }
+
+  let parsedStock; // gardée hors du bloc pour être réutilisable après le COMMIT
   if (stock !== undefined) {
-    const parsedStock = parseInt(stock, 10);
+    parsedStock = parseInt(stock, 10);
     if (isNaN(parsedStock) || parsedStock < 0) return res.status(400).json({ message: 'Stock invalide.' });
     fields.push(`stock = $${paramIndex++}`); values.push(parsedStock);
   }
+
   if (image_url !== undefined) { fields.push(`image_url = $${paramIndex++}`); values.push(image_url || null); }
   if (sku !== undefined) { fields.push(`sku = $${paramIndex++}`); values.push(sku || null); }
   if (is_published !== undefined) { fields.push(`is_published = $${paramIndex++}`); values.push(Boolean(is_published)); }
@@ -307,6 +309,20 @@ exports.updateProduct = async (req, res) => {
   const client = await db.pool.connect();
   try {
     await client.query('BEGIN');
+
+    // Stock AVANT modification : c'est la seule façon de savoir si on vient
+    // de repasser de 0 (ou moins) à un stock positif, et donc s'il faut
+    // prévenir la wishlist. Lu ici, dans la transaction, avant l'UPDATE.
+    let oldStock = null;
+    if (stock !== undefined) {
+      const oldStockResult = await client.query('SELECT stock FROM products WHERE id = $1', [id]);
+      if (oldStockResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        client.release();
+        return res.status(404).json({ message: 'Produit non trouvé.' });
+      }
+      oldStock = parseInt(oldStockResult.rows[0].stock, 10);
+    }
 
     let updatedProduct;
 
@@ -391,6 +407,16 @@ exports.updateProduct = async (req, res) => {
     finalProduct.tags_names = finalProduct.tags_names || [];
 
     res.status(200).json({ message: 'Produit mis à jour avec succès!', product: finalProduct });
+
+    // NOUVEAU : retour en stock — HORS transaction, non bloquant.
+    // Déclenché uniquement si on passe d'un stock nul/négatif à un stock
+    // positif ; un simple réajustement (10 -> 15) ne doit pas spammer la
+    // wishlist.
+    if (oldStock !== null && oldStock <= 0 && parsedStock > 0) {
+      wishlistController.notifyWishlistUsersOnRestock(id).catch((err) => {
+        console.error(`Erreur notification restock produit ${id}:`, err);
+      });
+    }
 
   } catch (error) {
     await client.query('ROLLBACK');

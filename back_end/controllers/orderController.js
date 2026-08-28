@@ -5,6 +5,7 @@ const livraisonController = require('../controllers/livraisonController');
 const { resoudreZone } = require('../utils/shipping');
 const { v4: uuidv4 } = require('uuid');
 const { sendNewOrderEmails } = require("../utils/sendEmail.js"); // <-- AJOUT
+const { sendNewOrderEmails, sendOrderStatusEmail } = require("../utils/sendEmail.js");
 
 // --- Créer une nouvelle commande (CLIENT) ---
 exports.createOrder = async (req, res) => {
@@ -509,7 +510,7 @@ exports.getOrderDetailsAdmin = async (req, res) => {
 // Version mise à jour pour gérer aussi le statut du paiement pour les commandes 'cod'
 exports.updateOrderStatusAdmin = async (req, res) => {
   const { orderId } = req.params;
-  const { status: newStatus } = req.body; // Renommé en newStatus pour plus de clarté
+  const { status: newStatus, trackingNumber } = req.body;
 
   const allowedStatuses = ['pending', 'awaiting_payment', 'paid', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded', 'failed'];
   if (!newStatus || !allowedStatuses.includes(newStatus)) {
@@ -518,37 +519,32 @@ exports.updateOrderStatusAdmin = async (req, res) => {
 
   const client = await db.pool.connect();
   try {
-    // DÉBUT DE LA TRANSACTION : les deux mises à jour (commande et paiement) doivent réussir ou échouer ensemble.
     await client.query('BEGIN');
 
     // Étape 1 : Mettre à jour le statut de la commande
+    // On récupère aussi l'email/nom du client ici, dans la même requête,
+    // pour ne pas faire un aller-retour DB supplémentaire juste pour l'email.
     const updateOrderQuery = `
-      UPDATE orders 
+      UPDATE orders o
       SET status = $1, updated_at = CURRENT_TIMESTAMP 
-      WHERE id = $2 
-      RETURNING id, user_id, order_number, status;
+      WHERE o.id = $2 
+      RETURNING o.id, o.user_id, o.order_number, o.status;
     `;
     const updateResult = await client.query(updateOrderQuery, [newStatus, orderId]);
 
     if (updateResult.rows.length === 0) {
-      throw new Error('Commande non trouvée.'); // L'erreur sera catchée plus bas
+      throw new Error('Commande non trouvée.');
     }
     const updatedOrder = updateResult.rows[0];
 
-    // =====================================================================================
-    // NOUVELLE LOGIQUE : Si la commande est marquée comme "livrée"...
-    // =====================================================================================
+    // Étape 1 bis : Statut "livrée" + paiement à la livraison encore en attente
     if (newStatus === 'delivered') {
-      // On vérifie si le paiement associé doit être mis à jour.
       const paymentCheckQuery = 'SELECT id, payment_method, status FROM payments WHERE order_id = $1';
       const paymentResult = await client.query(paymentCheckQuery, [orderId]);
 
       if (paymentResult.rows.length > 0) {
         const payment = paymentResult.rows[0];
-        
-        // ...ET que la méthode était "paiement à la livraison", ET qu'il est encore "en attente"
         if (payment.payment_method === 'cod' && payment.status === 'pending') {
-          // Alors on met à jour le statut du paiement à "réussi" !
           const updatePaymentQuery = `
             UPDATE payments 
             SET status = 'succeeded', paid_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
@@ -559,12 +555,10 @@ exports.updateOrderStatusAdmin = async (req, res) => {
         }
       }
     }
-    // =====================================================================================
 
-    // Étape 2 : Créer une notification pour l'utilisateur (logique existante)
+    // Étape 2 : Notification in-app pour l'utilisateur
     let notificationTitle = '';
     let notificationMessage = '';
-    // ... votre logique de switch/case pour les notifications ...
     switch (newStatus) {
       case 'processing':
         notificationTitle = 'Votre commande est en préparation !';
@@ -581,12 +575,14 @@ exports.updateOrderStatusAdmin = async (req, res) => {
       case 'cancelled':
         notificationTitle = 'Votre commande a été annulée.';
         notificationMessage = `Nous vous informons que votre commande #${updatedOrder.order_number} a été annulée. Veuillez nous contacter pour plus d'informations.`;
-        createNotification = true;
         break;
       case 'refunded':
         notificationTitle = 'Votre commande vous sera remboursée.';
-        notificationMessage = `Nous vous informons que votre commande #${updatedOrder.order_number} a été annulée et vous seras rembourser après examen. Veuillez nous contacter pour plus d'informations.`;
-        createNotification = true;
+        notificationMessage = `Nous vous informons que votre commande #${updatedOrder.order_number} a été annulée et vous sera remboursée après examen. Veuillez nous contacter pour plus d'informations.`;
+        break;
+      case 'failed':
+        notificationTitle = 'Le paiement de votre commande a échoué.';
+        notificationMessage = `Le paiement de votre commande #${updatedOrder.order_number} n'a pas pu être traité.`;
         break;
     }
 
@@ -599,12 +595,31 @@ exports.updateOrderStatusAdmin = async (req, res) => {
       await client.query(notificationQuery, [updatedOrder.user_id, notificationTitle, notificationMessage, linkUrl]);
     }
 
-    // FIN DE LA TRANSACTION : On valide toutes les modifications.
     await client.query('COMMIT');
+
+    // Étape 3 : Email au client — HORS transaction et non bloquant.
+    // Un email qui échoue ne doit jamais faire perdre la mise à jour de statut,
+    // qui elle est déjà actée en base.
+    if (updatedOrder.user_id) {
+      try {
+        const userResult = await db.query('SELECT email FROM users WHERE id = $1', [updatedOrder.user_id]);
+        const userEmail = userResult.rows[0]?.email;
+        if (userEmail) {
+          await sendOrderStatusEmail(userEmail, {
+            orderNumber: updatedOrder.order_number,
+            status: newStatus,
+            trackingNumber,
+          });
+        }
+      } catch (emailError) {
+        console.error(`Erreur envoi email statut commande ${orderId}:`, emailError);
+      }
+    }
+
     res.status(200).json({ message: 'Statut de la commande mis à jour avec succès.', order: updatedOrder });
 
   } catch (error) {
-    await client.query('ROLLBACK'); // Annuler toutes les modifications en cas d'erreur
+    await client.query('ROLLBACK');
     console.error(`Erreur admin màj statut commande ${orderId}:`, error.message);
     if (error.message === 'Commande non trouvée.') {
         return res.status(404).json({ message: error.message });
@@ -614,7 +629,6 @@ exports.updateOrderStatusAdmin = async (req, res) => {
     client.release();
   }
 };
-
 
 // NOUVEAU : Récupérer les détails d'UNE commande spécifique pour l'UTILISATEUR CONNECTÉ
 exports.getUserOrderDetail = async (req, res) => {
