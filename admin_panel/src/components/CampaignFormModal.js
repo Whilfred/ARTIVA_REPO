@@ -169,7 +169,14 @@ function CampaignFormModal({ isOpen, onClose, onSaved, apiBaseUrl, adminToken })
 
         <div className="form-group">
           <label>Contenu :</label>
-          <ReactQuill theme="snow" value={bodyHtml} onChange={setBodyHtml} modules={QUILL_MODULES} />
+          {isOpen && (
+            <ReactQuill 
+              theme="snow" 
+              value={bodyHtml} 
+              onChange={setBodyHtml} 
+              modules={QUILL_MODULES} 
+            />
+          )}
         </div>
 
         <div className="form-group">
