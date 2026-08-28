@@ -18,6 +18,10 @@ const livraisonRoutes = require('./routes/livraisonRoutes');
 const avisRouter = require('./routes/avis');
 const campaignRoutes = require('./routes/campaignRoutes');
 
+// Importer et démarrer le planificateur de campagnes
+const { startCampaignScheduler } = require('./utils/campaignScheduler');
+startCampaignScheduler();
+
 const app = express();
 
 app.use(cors());
@@ -44,9 +48,10 @@ app.use('/api/cart', cartRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/promo', promoRoutes);
 app.use('/api/livraison', livraisonRoutes);
+app.use('/api/campaigns', campaignRoutes); // <-- Correctement placé ici
 
 // Monter le router des avis à la racine /api
-app.use('/api', avisRouter); // <-- toutes les routes dans avis.js auront le préfixe /api
+app.use('/api', avisRouter);
 
 // Middleware de gestion des erreurs
 app.use((err, req, res, next) => {
@@ -54,6 +59,4 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Quelque chose s\'est mal passé !' });
 });
 
-// ...
-app.use('/api/campaigns', campaignRoutes); // avec les autres app.use
 module.exports = app;
