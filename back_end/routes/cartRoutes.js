@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const cartController = require('../controllers/cartController');
 const authMiddleware = require('../middlewares/authMiddleware'); // Toutes les actions panier nécessitent auth
+const adminMiddleware = require('../middlewares/adminMiddleware'); // à ajouter en haut du fichier, avec les autres require
 
 // GET /api/cart - Récupérer le panier de l'utilisateur connecté
 router.get('/', authMiddleware, cartController.getUserCart);
@@ -18,5 +19,7 @@ router.delete('/items/:cartItemId', authMiddleware, cartController.removeItemFro
 // DELETE /api/cart - Vider tout le panier de l'utilisateur
 router.delete('/clear', authMiddleware, cartController.clearUserCart);
 
+// GET /api/cart/admin/:userId - Voir le panier d'un utilisateur (ADMIN)
+router.get('/admin/:userId', authMiddleware, adminMiddleware, cartController.getUserCartAdmin);
 
 module.exports = router;

@@ -15,32 +15,19 @@ const cartRoutes = require('./routes/cartRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const promoRoutes = require('./routes/promoRoutes');
 const livraisonRoutes = require('./routes/livraisonRoutes');
-const avisRouter = require('./routes/avis'); // <-- Ajouter le router des avis
-
-// NOTE : routes/dashboardRoutes.js n'est volontairement PAS importé ici.
-// C'est un reliquat écrit pour Mongoose/MongoDB (Order.countDocuments(),
-// Order.aggregate(), require('../models/User')...) alors que le projet tourne
-// sur PostgreSQL et n'a pas de dossier models/. L'importer ferait planter le
-// serveur au démarrage. Le tableau de bord du panel admin n'en a pas besoin :
-// il calcule ses statistiques à partir de /api/orders, /api/users et
-// /api/products.
+const avisRouter = require('./routes/avis');
+const campaignRoutes = require('./routes/campaignRoutes');
 
 const app = express();
 
-// Middlewares globaux
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-// app.use(morgan('dev')); <-- Supprimé car tu ne veux pas l'utiliser
 
-// Route de test simple
 app.get('/', (req, res) => {
   res.json({ message: 'Bienvenue sur l\'API Artiva !' });
 });
 
-// Route de santé : l'app mobile l'interroge pour savoir si le serveur répond
-// (front_end/context/AuthContext.tsx envoie un HEAD sur /api/health).
-// Elle était appelée côté client mais n'avait jamais été définie ici.
 app.all('/api/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
 });
@@ -67,4 +54,6 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Quelque chose s\'est mal passé !' });
 });
 
+// ...
+app.use('/api/campaigns', campaignRoutes); // avec les autres app.use
 module.exports = app;

@@ -34,4 +34,6 @@ router.put('/:id', authMiddleware, adminMiddleware, userController.updateUserByA
 
 // DELETE /api/users/:id - Supprimer un utilisateur (Admin)
 router.delete('/:id', authMiddleware, adminMiddleware, userController.deleteUserByAdmin);
+// PUT /api/users/:id/anonymize - Anonymiser un utilisateur en conservant ses données (Admin)
+router.put('/:id/anonymize', authMiddleware, adminMiddleware, userController.anonymizeUserByAdmin);
 module.exports = router;

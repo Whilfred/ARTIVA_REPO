@@ -138,14 +138,24 @@ exports.updateUserByAdmin = async (req, res) => {
 // --- NOUVEAU (Admin) : Supprimer un utilisateur (CLIENT) ---
 // Attention: Réfléchis bien aux implications (commandes associées, etc.)
 // ON DELETE SET NULL sur user_id dans orders est une bonne approche.
+// --- (Admin) : Supprimer DÉFINITIVEMENT un utilisateur (CLIENT) ---
+// Refusé si l'utilisateur a des commandes : la suppression casserait
+// l'historique (comptabilité, stats, litiges). Utiliser l'anonymisation
+// dans ce cas — voir anonymizeUserByAdmin ci-dessous.
 exports.deleteUserByAdmin = async (req, res) => {
   const { id } = req.params;
   try {
-    // Vérifier que l'on ne supprime pas un admin via cette route par erreur
     const userCheck = await db.query('SELECT role FROM users WHERE id = $1', [id]);
-    if (userCheck.rows.length > 0 && (userCheck.rows[0].role === 'admin' || userCheck.rows[0].role === 'super_admin')) {
-        // Si tes admins sont aussi dans la table 'users'
-        // return res.status(403).json({ message: 'Les administrateurs ne peuvent pas être supprimés via cette route.' });
+    if (userCheck.rows.length === 0) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé.' });
+    }
+
+    const ordersCheck = await db.query('SELECT COUNT(*)::int AS n FROM orders WHERE user_id = $1', [id]);
+    if (ordersCheck.rows[0].n > 0) {
+      return res.status(409).json({
+        message: `Cet utilisateur a ${ordersCheck.rows[0].n} commande(s) : la suppression définitive effacerait cet historique. Utilisez plutôt l'anonymisation.`,
+        hasOrders: true,
+      });
     }
 
     const deleteQuery = 'DELETE FROM users WHERE id = $1 RETURNING id, name, email, role;';
@@ -157,11 +167,54 @@ exports.deleteUserByAdmin = async (req, res) => {
     res.status(200).json({ message: 'Utilisateur supprimé avec succès.', user: result.rows[0] });
   } catch (error) {
     console.error(`Erreur lors de la suppression de l'utilisateur ${id}:`, error);
-    // Gérer les erreurs de clé étrangère si ON DELETE RESTRICT est utilisé ailleurs
     res.status(500).json({ message: 'Erreur serveur lors de la suppression de l\'utilisateur.' });
   }
 };
 
+// --- (Admin) : Anonymiser un utilisateur (supprime son identité, garde ses données) ---
+// Le compte devient inutilisable (email placeholder, mot de passe vidé,
+// is_active = FALSE) mais orders/order_items/avis restent liés à son id :
+// l'historique de vente et les stats ne bougent pas.
+exports.anonymizeUserByAdmin = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const userCheck = await db.query('SELECT id, is_deleted FROM users WHERE id = $1', [id]);
+    if (userCheck.rows.length === 0) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé.' });
+    }
+    if (userCheck.rows[0].is_deleted) {
+      return res.status(400).json({ message: 'Cet utilisateur est déjà anonymisé.' });
+    }
+
+    const placeholderEmail = `utilisateur-supprime-${id}@artiva.local`;
+
+    const query = `
+      UPDATE users SET
+        name = 'Utilisateur supprimé',
+        email = $1,
+        phone = NULL,
+        address = NULL,
+        google_id = NULL,
+        picture = NULL,
+        password_hash = '',
+        is_active = FALSE,
+        is_deleted = TRUE,
+        deleted_at = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      RETURNING id, name, email, is_deleted, deleted_at;
+    `;
+    const { rows } = await db.query(query, [placeholderEmail, id]);
+
+    res.status(200).json({
+      message: 'Compte anonymisé : les informations personnelles ont été effacées, l\'historique de commandes est conservé.',
+      user: rows[0],
+    });
+  } catch (error) {
+    console.error(`Erreur anonymisation utilisateur ${id}:`, error);
+    res.status(500).json({ message: 'Erreur serveur lors de l\'anonymisation.' });
+  }
+};
 // NOUVEAU : Mettre à jour le profil de l'utilisateur actuellement connecté (CLIENT)
 exports.updateMyProfile = async (req, res) => {
   const userId = req.user.id; // De authMiddleware

@@ -757,6 +757,27 @@ const sendWishlistRestockEmail = async (to, products) => {
 // =============================================================================
 // Exports CommonJS
 // =============================================================================
+// =============================================================================
+// NOUVEAU — Email de campagne marketing
+// =============================================================================
+//
+// Contrairement aux autres emails, le contenu HTML vient tel quel de
+// l'éditeur riche de l'admin : on ne le réenveloppe pas dans carteEmail(),
+// pour ne pas casser la mise en forme qu'il a choisie.
+// =============================================================================
+
+const sendCampaignEmail = async (to, { subject, html }) => {
+  await sendMailWithLog(
+    {
+      fromName: "Artiva",
+      fromEmail: "artiva.app@gmail.com",
+      to,
+      subject,
+      html,
+    },
+    "Campaign"
+  );
+};
 
 module.exports = {
   sendLoginCode,
@@ -765,4 +786,5 @@ module.exports = {
   sendNewOrderEmails,
   sendOrderStatusEmail,
   sendWishlistRestockEmail,
+  sendCampaignEmail,
 };
