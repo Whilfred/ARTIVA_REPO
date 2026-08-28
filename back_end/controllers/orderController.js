@@ -4,9 +4,7 @@ const promoController = require('../controllers/promoController');
 const livraisonController = require('../controllers/livraisonController');
 const { resoudreZone } = require('../utils/shipping');
 const { v4: uuidv4 } = require('uuid');
-const { sendNewOrderEmails } = require("../utils/sendEmail.js"); // <-- AJOUT
 const { sendNewOrderEmails, sendOrderStatusEmail } = require("../utils/sendEmail.js");
-
 // --- Créer une nouvelle commande (CLIENT) ---
 exports.createOrder = async (req, res) => {
   const userId = req.user.id;
