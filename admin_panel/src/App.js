@@ -13,7 +13,8 @@ import ProductTagsPage from './pages/ProductTagsPage';
 import PromoCodesPage from './pages/PromoCodesPage';
 import FreeShippingPage from './pages/FreeShippingPage';
 import ShippingZonesPage from './pages/ShippingZonesPage';
-
+import CampaignsPage from './pages/CampaignsPage';
+import { Mail } from 'lucide-react';
 
 import './App.css';
 
@@ -39,6 +40,7 @@ const Sidebar = ({ handleLogout, isMobileOpen, onCloseMobile }) => {
     { path: "/livraison-gratuite", label: "Livraison Gratuite", Icon: Truck },
     { path: "/reports", label: "Reports", Icon: BarChart2 },
     { path: "/scan-order", label: "Scanner Commande", Icon: ScanIcon },
+    { path: "/campaigns", label: "Campagnes Email", Icon: Mail },
   ];
 
   return (
@@ -151,6 +153,7 @@ function App() {
         <Route path="/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
         <Route path="/" element={ localStorage.getItem('adminToken') ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to={localStorage.getItem('adminToken') ? "/dashboard" : "/login"} replace />} />
+        <Route path="/campaigns" element={<ProtectedRoute><CampaignsPage /></ProtectedRoute>}/>
       </Routes>
     </Router>
   );
