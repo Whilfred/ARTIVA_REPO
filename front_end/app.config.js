@@ -4,12 +4,12 @@ import 'dotenv/config';
 export default {
   name: "Artiva",
   slug: "artiva",
-  version: "1.4.1",
+  version: "1.5.8",
   sdkVersion: "57.0.0",
   platforms: ["ios", "android", "web"],
   orientation: "portrait",
   icon: "./assets/images/Artiva_icon.png",
-  scheme: "artiva",  // ← Gardez ceci
+  scheme: "artiva",
   userInterfaceStyle: "automatic",
   splash: {
     image: "./assets/images/Artiva_icon.png",
@@ -29,23 +29,13 @@ export default {
     },
     edgeToEdgeEnabled: true,
     permissions: [
-      "READ_EXTERNAL_STORAGE",
-      "WRITE_EXTERNAL_STORAGE",
       "CAMERA"
     ],
     package: "com.fathanemarcos.artiva",
-    versionCode: 42,
-    // ❌ SUPPRIMEZ TOUT intentFilters
+    versionCode: 72
   },
   web: {
     bundler: "metro",
-    // "single" = application monopage, sans prerendu cote serveur.
-    //
-    // En "static", expo-router execute chaque ecran dans Node pour generer le
-    // HTML. Depuis le SDK 57 ce prerendu echoue sur checkout.tsx ("Class
-    // extends value undefined"), a cause d'une bibliotheque tierce qui suppose
-    // un environnement natif. Le rendu serveur n'apporte rien ici : cette
-    // application mobile n'est ouverte dans un navigateur que pour les tests.
     output: "single",
     favicon: "./assets/images/favicon.png"
   },
@@ -54,8 +44,6 @@ export default {
     "expo-secure-store",
     "expo-localization",
     "@react-native-google-signin/google-signin",
-    // Depuis le SDK 57, ces modules doivent être déclarés explicitement ici :
-    // le CLI les réclame au lancement s'ils manquent.
     "expo-font",
     "expo-splash-screen",
     "expo-status-bar",
@@ -66,12 +54,6 @@ export default {
     typedRoutes: true
   },
   extra: {
-    // L'adresse du backend est désormais résolue par constants/Api.ts (qui
-    // détecte automatiquement l'IP de la machine de développement). On garde la
-    // clé ici pour compatibilité, mais elle n'est plus la source de vérité.
-    //
-    // --- PRODUCTION (désactivé en local) ---
-    // API_BASE_URL: process.env.API_BASE_URL ?? "https://back-end-purple-log-1280.fly.dev/api",
     API_BASE_URL: process.env.API_BASE_URL ?? null,
     router: {},
     eas: {
