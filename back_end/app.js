@@ -18,10 +18,6 @@ const livraisonRoutes = require('./routes/livraisonRoutes');
 const avisRouter = require('./routes/avis');
 const campaignRoutes = require('./routes/campaignRoutes');
 
-// Importer et démarrer le planificateur de campagnes
-const { startCampaignScheduler } = require('./utils/campaignScheduler');
-startCampaignScheduler();
-
 const app = express();
 
 app.use(cors());

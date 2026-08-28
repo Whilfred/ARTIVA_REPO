@@ -1,8 +1,7 @@
 // ARTIVA/back_end/utils/campaignScheduler.js
 const cron = require('node-cron');
 const pool = require('../config/db'); // Adaptez le chemin vers votre connexion PostgreSQL si nécessaire
-const { sendCampaignEmail } = require('../services/emailService'); // Ou votre utilitaire/service d'envoi Brevo
-
+const { sendCampaignEmail } = require('./sendEmail');
 function startCampaignScheduler() {
   // S'exécute toutes les minutes
   cron.schedule('* * * * *', async () => {
@@ -24,37 +23,59 @@ function startCampaignScheduler() {
 
       // 2. Traiter chaque campagne
       for (const campaign of result.rows) {
-        console.log(`[Scheduler] Lancement de la campagne ID : ${campaign.id} - "${campaign.subject}"`);
-        
-        // Passer la campagne au statut 'sending' pour éviter les doublons d'envoi
-        await pool.query(
-          "UPDATE email_campaigns SET status = 'sending' WHERE id = $1",
-          [campaign.id]
-        );
-
-        let sentCount = 0;
+let sentCount = 0;
         let failCount = 0;
 
         try {
-          // Exécuter l'envoi effectif via la fonction d'envoi (Brevo)
-          // Si vous avez déjà une fonction globale d'envoi de campagne, appelez-la ici :
-          if (typeof sendCampaignEmail === 'function') {
-            const res = await sendCampaignEmail(campaign);
-            sentCount = res?.sentCount || 1;
-            failCount = res?.failCount || 0;
-          }
-
-          // Marquer la campagne comme envoyée
-          await pool.query(
-            `UPDATE email_campaigns 
-             SET status = 'sent', envoyes = $1, echoues = $2, sent_at = NOW() 
-             WHERE id = $3`,
-            [sentCount, failCount, campaign.id]
+          // 1. Récupérer tous les destinataires prévus pour cette campagne
+          const recipientsRes = await pool.query(
+            "SELECT * FROM email_campaign_recipients WHERE campaign_id = $1 AND status = 'pending'",
+            [campaign.id]
           );
 
-          console.log(`[Scheduler] Campagne ID ${campaign.id} envoyée avec succès ! (${sentCount} envoyés, ${failCount} échecs)`);
+          const recipients = recipientsRes.rows;
+
+          if (recipients.length === 0) {
+            console.log(`[Scheduler] Aucun destinataire en attente pour la campagne ID ${campaign.id}`);
+          }
+
+          // 2. Boucler sur chaque destinataire pour envoyer l'e-mail
+          for (const recipient of recipients) {
+            try {
+              // Appel de la fonction de sendEmail.js avec les bonnes propriétés (body_html de votre table)
+              await sendCampaignEmail(recipient.email, {
+                subject: campaign.subject,
+                html: campaign.body_html
+              });
+
+              // Mettre à jour le statut du destinataire en 'sent'
+              await pool.query(
+                "UPDATE email_campaign_recipients SET status = 'sent', sent_at = NOW() WHERE id = $1",
+                [recipient.id]
+              );
+              sentCount++;
+            } catch (recipientErr) {
+              console.error(`[Scheduler] Échec d'envoi pour ${recipient.email} :`, recipientErr);
+              // Mettre à jour le statut du destinataire en 'failed' avec l'erreur
+              await pool.query(
+                "UPDATE email_campaign_recipients SET status = 'failed', error = $1 WHERE id = $2",
+                [recipientErr.message, recipient.id]
+              );
+              failCount++;
+            }
+          }
+
+          // 3. Marquer la campagne globale comme envoyée
+          await pool.query(
+            `UPDATE email_campaigns 
+             SET status = 'sent', sent_at = NOW() 
+             WHERE id = $1`,
+            [campaign.id]
+          );
+
+          console.log(`[Scheduler] Campagne ID ${campaign.id} terminée ! (${sentCount} envoyés, ${failCount} échecs)`);
         } catch (sendErr) {
-          console.error(`[Scheduler] Échec d'envoi pour la campagne ID ${campaign.id} :`, sendErr);
+          console.error(`[Scheduler] Erreur globale pour la campagne ID ${campaign.id} :`, sendErr);
           await pool.query(
             "UPDATE email_campaigns SET status = 'failed' WHERE id = $1",
             [campaign.id]
