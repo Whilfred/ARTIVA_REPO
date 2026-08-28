@@ -287,15 +287,25 @@ async function executeCampaignSend(campaignId) {
 
   const destinataires = await resolveTargetUsers(db, campaign);
 
-  if (destinataires.length === 0) {
-    await db.query(
-      `UPDATE email_campaigns SET status = 'sent', sent_at = CURRENT_TIMESTAMP WHERE id = $1`,
-      [campaignId]
-    );
-    console.log(`[Campaign ${campaignId}] Aucun destinataire, campagne marquée envoyée sans envoi.`);
-    return;
-  }
+if (destinataires.length === 0) {
+  await db.query(
+    `
+    UPDATE email_campaigns
+    SET
+      status = 'failed',
+      sent_at = NULL,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = $1
+    `,
+    [campaignId]
+  );
 
+  console.log(
+    `[Campaign ${campaignId}] Aucun destinataire trouvé. Campagne marquée comme échouée.`
+  );
+
+  return;
+}
   // Snapshot des destinataires : permet de suivre qui a reçu quoi, même si
   // le ciblage (ex: filtre) change de résultat après coup.
   for (const u of destinataires) {
