@@ -843,4 +843,120 @@ WHERE NOT EXISTS (
 );
 
 
+-- -----------------------------------------------------------------------------
+-- Campagnes email
+-- -----------------------------------------------------------------------------
+-- Tables déduites des requêtes de back_end/controllers/campaignController.js et
+-- back_end/utils/campaignScheduler.js, qui les utilisaient sans qu'elles soient
+-- définies nulle part : ni ici, ni dans db/init/. La fonctionnalité ne pouvait
+-- donc pas fonctionner sur une installation neuve.
+--
+-- Les destinataires sont figés au moment de l'ENVOI, pas à la création : une
+-- campagne programmée dans trois jours doit toucher les clients tels qu'ils
+-- seront alors. D'où la table de snapshot séparée.
+-- -----------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS email_campaigns (
+  id              SERIAL PRIMARY KEY,
+
+  subject         TEXT NOT NULL,
+  body_html       TEXT NOT NULL,
+
+  -- 'all'    : tous les comptes actifs
+  -- 'manual' : une liste d'identifiants choisis à la main
+  -- 'filter' : un ciblage calculé (jamais commandé, inactif depuis N jours,
+  --            panier abandonné depuis N heures)
+  target_type     VARCHAR(20) NOT NULL,
+
+  -- JSONB et non TEXT : le contrôleur relit cette valeur comme un objet
+  -- (filtre.never_ordered, filtre.inactive_days…). Stockée en texte, chaque
+  -- clé vaudrait undefined et un ciblage filtré arroserait TOUS les clients.
+  target_filter   JSONB,
+
+  -- Tableau d'entiers et non JSONB : le contrôleur passe un tableau JavaScript
+  -- en paramètre, que node-postgres sérialise en littéral de tableau Postgres.
+  manual_user_ids INTEGER[],
+
+  -- 'draft' → 'scheduled' → 'sending' → 'sent' | 'failed'
+  -- Le planificateur s'appuie sur le passage 'scheduled' → 'sending' comme
+  -- verrou : il évite qu'une même campagne parte deux fois.
+  status          VARCHAR(20) NOT NULL DEFAULT 'draft',
+
+  scheduled_at    TIMESTAMPTZ,
+  sent_at         TIMESTAMPTZ,
+
+  -- Référence la table `admin`, pas `users` : le jeton d'un administrateur
+  -- porte l'identifiant issu de `admin` (voir authController.js, loginAdmin).
+  created_by      INTEGER REFERENCES admin(id) ON DELETE SET NULL,
+
+  created_at      TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at      TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT email_campaigns_target_check
+    CHECK (target_type IN ('all', 'manual', 'filter')),
+  CONSTRAINT email_campaigns_status_check
+    CHECK (status IN ('draft', 'scheduled', 'sending', 'sent', 'failed')),
+  CONSTRAINT email_campaigns_subject_check
+    CHECK (btrim(subject) <> ''),
+  -- Une campagne programmée sans date ne serait jamais déclenchée : elle
+  -- resterait indéfiniment en attente sans que rien ne le signale.
+  CONSTRAINT email_campaigns_scheduled_check
+    CHECK (status <> 'scheduled' OR scheduled_at IS NOT NULL)
+);
+
+-- Requête du planificateur, exécutée toutes les minutes : les campagnes
+-- programmées dont l'heure est passée. Index partiel, car les campagnes déjà
+-- envoyées n'ont aucune raison d'être parcourues.
+CREATE INDEX IF NOT EXISTS idx_email_campaigns_a_envoyer
+  ON email_campaigns (scheduled_at)
+  WHERE status = 'scheduled';
+
+CREATE INDEX IF NOT EXISTS idx_email_campaigns_created
+  ON email_campaigns (created_at DESC);
+
+DROP TRIGGER IF EXISTS trigger_email_campaigns_updated_at ON email_campaigns;
+CREATE TRIGGER trigger_email_campaigns_updated_at
+  BEFORE UPDATE ON email_campaigns
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+
+-- -----------------------------------------------------------------------------
+-- Destinataires figés d'une campagne
+-- -----------------------------------------------------------------------------
+-- L'email et le nom sont RECOPIÉS plutôt que lus dans `users` : on veut savoir
+-- à quelle adresse le message est réellement parti, même si le client change
+-- d'adresse ou supprime son compte ensuite.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS email_campaign_recipients (
+  id          SERIAL PRIMARY KEY,
+
+  campaign_id INTEGER NOT NULL REFERENCES email_campaigns(id) ON DELETE CASCADE,
+  user_id     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+
+  email       VARCHAR(255) NOT NULL,
+  name        VARCHAR(255),
+
+  -- La valeur par défaut est indispensable : le contrôleur insère SANS préciser
+  -- le statut, puis sélectionne les lignes 'pending' pour envoyer. Sans ce
+  -- défaut, la liste serait vide et aucun email ne partirait jamais.
+  status      VARCHAR(20) NOT NULL DEFAULT 'pending',
+
+  -- Message d'erreur du fournisseur, tronqué à 500 caractères par le code.
+  error       TEXT,
+  sent_at     TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT email_campaign_recipients_status_check
+    CHECK (status IN ('pending', 'sent', 'failed'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_campaign_recipients_campagne
+  ON email_campaign_recipients (campaign_id);
+
+-- Le passage d'envoi ne lit que les destinataires encore en attente.
+CREATE INDEX IF NOT EXISTS idx_campaign_recipients_en_attente
+  ON email_campaign_recipients (campaign_id)
+  WHERE status = 'pending';
+
+
 -- Fin du script
