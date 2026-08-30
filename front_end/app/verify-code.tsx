@@ -8,13 +8,13 @@ import {
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
-  Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   useColorScheme,
 } from "react-native";
+import { Alert } from "../constants/Alerte"; // Alert.alert est inopérant sur le web — voir ce fichier
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";

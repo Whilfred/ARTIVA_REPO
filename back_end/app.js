@@ -14,6 +14,7 @@ const wishlistRoutes = require('./routes/wishlistRoutes');
 const cartRoutes = require('./routes/cartRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const promoRoutes = require('./routes/promoRoutes');
+const loyaltyRoutes = require('./routes/loyaltyRoutes');
 const livraisonRoutes = require('./routes/livraisonRoutes');
 const avisRouter = require('./routes/avis');
 const campaignRoutes = require('./routes/campaignRoutes');
@@ -43,6 +44,7 @@ app.use('/api/wishlist', wishlistRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/promo', promoRoutes);
+app.use('/api/fidelite', loyaltyRoutes);
 app.use('/api/livraison', livraisonRoutes);
 app.use('/api/campaigns', campaignRoutes); // <-- Correctement placé ici
 

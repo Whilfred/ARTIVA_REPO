@@ -1,0 +1,212 @@
+/* admin_panel/src/pages/LoyaltyPage.css
+   Programme de fidélité.
+
+   Cette feuille reprend celle de la page Livraison gratuite : les deux pages
+   ont la même forme — une rangée de compteurs, un formulaire de réglages — et
+   doivent se ressembler. Seul le préfixe change (.fid- au lieu de .fs-), pour
+   qu'une retouche sur l'une n'aille pas déformer l'autre à son insu. */
+
+   Styles propres à la page des conditions de livraison gratuite.
+   La structure générale (page-header, back-link, custom-table) vient de
+   ProductManagementPage.css, importé en plus de ce fichier. */
+
+/* --- Bandeau de synthèse --------------------------------------------------- */
+.fid-stats {
+  display: grid;
+  /* auto-fit plutôt qu'un nombre fixe de colonnes : les quatre cartes passent
+     d'elles-mêmes sur une ou deux lignes sur un écran étroit. */
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 16px;
+  margin-bottom: 26px;
+}
+
+.fid-stat {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+
+.fid-stat-valeur {
+  font-size: 26px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.1;
+}
+
+.fid-stat-libelle {
+  font-size: 12px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-top: 6px;
+}
+
+.fid-stat.disponibles .fid-stat-valeur { color: #1e7e34; }
+.fid-stat.offert     .fid-stat-valeur { color: #b45309; }
+
+/* --- Formulaire des conditions -------------------------------------------- */
+.fid-carte {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 22px 24px;
+  margin-bottom: 26px;
+  max-width: 760px;
+}
+
+.fid-carte h3 {
+  margin: 0 0 4px;
+  font-size: 17px;
+  color: #111827;
+}
+
+.fid-carte-aide {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0 0 20px;
+}
+
+.fid-champs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 18px;
+}
+
+.fid-champ label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.fid-champ input[type="number"] {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 15px;
+  box-sizing: border-box;
+}
+
+.fid-champ input[type="number"]:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.fid-champ-aide {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-top: 5px;
+}
+
+/* Interrupteur d'activation : une case à cocher native reste la plus lisible,
+   on se contente de lui donner de l'air et une zone cliquable généreuse. */
+.fid-interrupteur {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 16px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  cursor: pointer;
+}
+
+.fid-interrupteur input { margin-top: 3px; width: 17px; height: 17px; cursor: pointer; }
+.fid-interrupteur-titre { font-weight: 600; color: #111827; font-size: 14px; }
+.fid-interrupteur-aide  { font-size: 12px; color: #6b7280; margin-top: 3px; }
+
+/* Phrase récapitulant les réglages en français. Le formulaire seul laisse le
+   doute sur ce que la combinaison des trois champs produit réellement. */
+.fid-resume {
+  background: #eff6ff;
+  border-left: 4px solid #2563eb;
+  padding: 12px 16px;
+  border-radius: 0 8px 8px 0;
+  font-size: 14px;
+  color: #1e3a5f;
+  line-height: 1.55;
+  margin: 20px 0;
+}
+
+.fid-resume.inactif {
+  background: #fef2f2;
+  border-left-color: #dc2626;
+  color: #7f1d1d;
+}
+
+.fid-actions { display: flex; align-items: center; gap: 14px; }
+
+.fid-enregistrer {
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 11px 22px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.fid-enregistrer:hover:not(:disabled) { background: #1d4ed8; }
+.fid-enregistrer:disabled { background: #9ca3af; cursor: not-allowed; }
+
+.fid-message      { font-size: 13px; font-weight: 500; }
+.fid-message.ok   { color: #1e7e34; }
+.fid-message.ko   { color: #dc2626; }
+
+/* --- Pastilles de statut du journal --------------------------------------- */
+.fid-pastille {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.fid-pastille.disponible { background: #d1fae5; color: #065f46; }
+.fid-pastille.consomme   { background: #dbeafe; color: #1e40af; }
+.fid-pastille.expire     { background: #f3f4f6; color: #6b7280; }
+
+.fid-vide {
+  text-align: center;
+  color: #6b7280;
+  padding: 34px 16px;
+  font-size: 14px;
+}
+
+
+/* --- Tableau des clients ---------------------------------------------------- */
+.fid-points {
+  font-weight: 700;
+  color: #7c3aed;
+  white-space: nowrap;
+}
+
+.fid-progression {
+  height: 6px;
+  background: #ede9fe;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 5px;
+  max-width: 170px;
+}
+
+.fid-progression span {
+  display: block;
+  height: 100%;
+  background: #7c3aed;
+  border-radius: 3px;
+}
+
+.fid-stat.points  .fid-stat-valeur { color: #7c3aed; }
+.fid-stat.emis    .fid-stat-valeur { color: #2563eb; }
+.fid-stat.utilise .fid-stat-valeur { color: #059669; }
+.fid-stat.expire  .fid-stat-valeur { color: #9ca3af; }

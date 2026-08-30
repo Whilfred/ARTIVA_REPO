@@ -745,9 +745,9 @@ import {
   ScrollView,
   Modal,
   ActivityIndicator,
-  Alert,
   Platform,
 } from "react-native";
+import { Alert } from "../../constants/Alerte"; // Alert.alert est inopérant sur le web — voir ce fichier
 import {
   Settings,
   ShoppingBag,

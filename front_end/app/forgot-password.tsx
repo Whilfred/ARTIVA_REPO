@@ -1,7 +1,15 @@
 // ARTIVA/front_end/app/forgot-password.tsx
 
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+} from "react-native";
+import { Alert } from "../constants/Alerte"; // Alert.alert est inopérant sur le web — voir ce fichier
 import { Stack, useRouter } from 'expo-router';
 import LoadingArtiva from './product/LoadingArtiva';
 import { useAuth } from '../context/AuthContext';

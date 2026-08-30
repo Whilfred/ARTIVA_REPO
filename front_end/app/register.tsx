@@ -12,11 +12,11 @@ import {
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
-  Alert,
   useColorScheme,
   Dimensions,
   Linking,
 } from "react-native";
+import { Alert } from "../constants/Alerte"; // Alert.alert est inopérant sur le web — voir ce fichier
 import { Link, useRouter } from "expo-router";
 import { FontAwesome, MaterialIcons, Ionicons } from "@expo/vector-icons";
 import Colors from "../constants/Colors";

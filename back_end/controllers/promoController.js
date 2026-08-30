@@ -69,6 +69,15 @@ async function verifierCode(client, code, userId, sousTotal, verrouiller = false
 
   const promo = rows[0];
 
+  // Bon nominatif : le code appartient à un client précis.
+  //
+  // Ce contrôle vient AVANT tous les autres, et volontairement : dire « ce code
+  // a expiré » à quelqu'un qui essaie le bon d'un autre lui confirmerait que ce
+  // code existe. Le message reste donc le même que pour un code inconnu.
+  if (promo.user_id && promo.user_id !== userId) {
+    return { valide: false, message: "Ce code promo n'existe pas." };
+  }
+
   if (!promo.is_active) {
     return { valide: false, message: "Ce code promo n'est plus actif." };
   }

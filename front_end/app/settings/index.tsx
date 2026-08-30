@@ -246,8 +246,8 @@ import {
   ScrollView,
   TouchableOpacity, // Utiliser TouchableOpacity au lieu de Button pour plus de contrôle sur le style
   Platform,
-  Alert,
 } from "react-native";
+import { Alert } from "../../constants/Alerte"; // Alert.alert est inopérant sur le web — voir ce fichier
 import { useRouter, Href, Stack } from "expo-router";
 import {
   ChevronRight,

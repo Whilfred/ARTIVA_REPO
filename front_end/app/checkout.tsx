@@ -9,9 +9,9 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Image,
-  Alert,
   Platform,
 } from "react-native";
+import { Alert } from "../constants/Alerte"; // Alert.alert est inopérant sur le web — voir ce fichier
 import { Stack, useRouter } from "expo-router";
 import { FontAwesome } from "@expo/vector-icons";
 import QRCode from "react-native-qrcode-svg";

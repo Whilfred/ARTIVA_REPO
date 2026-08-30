@@ -592,11 +592,14 @@ CREATE TABLE IF NOT EXISTS free_shipping_rewards (
     CHECK (expires_at > earned_at),
   CONSTRAINT free_shipping_amount_check
     CHECK (qualifying_amount >= 0),
-  -- used_at et used_order_id vont toujours ensemble : un avantage consommé
-  -- sans commande associée serait une trace inexploitable.
+  -- Un avantage non consommé ne doit désigner aucune commande. L'inverse, en
+  -- revanche, doit rester possible : la clé étrangère ci-dessus est en
+  -- ON DELETE SET NULL, donc supprimer une commande vide used_order_id tout en
+  -- laissant used_at rempli. Exiger les deux ensemble rendait alors la
+  -- suppression de cette commande purement et simplement impossible — la base
+  -- refusait l'opération au lieu de conserver la trace, ce qui était l'intention.
   CONSTRAINT free_shipping_usage_check
-    CHECK ((used_at IS NULL AND used_order_id IS NULL)
-        OR (used_at IS NOT NULL AND used_order_id IS NOT NULL))
+    CHECK (used_at IS NOT NULL OR used_order_id IS NULL)
 );
 
 -- Index partiel : la question posée à chaque passage en caisse est « ce client
@@ -957,6 +960,153 @@ CREATE INDEX IF NOT EXISTS idx_campaign_recipients_campagne
 CREATE INDEX IF NOT EXISTS idx_campaign_recipients_en_attente
   ON email_campaign_recipients (campaign_id)
   WHERE status = 'pending';
+
+
+-- -----------------------------------------------------------------------------
+-- Programme de fidélité
+-- -----------------------------------------------------------------------------
+-- Le client accumule des points à chaque achat (1 point = 1 FCFA de produits).
+-- Dès que son solde atteint le seuil, un bon nominatif lui est attribué
+-- automatiquement, et son solde repart de zéro.
+--
+-- La valeur du bon est le cumul converti DIVISÉ PAR 40 : 30 000 donnent 750,
+-- 40 000 donnent 1 000. C'est ce qui explique la fourchette « 750 à 1 000 FCFA »
+-- du cahier des charges. Un plancher et un plafond bornent le résultat, sans
+-- quoi une commande exceptionnelle produirait un bon hors de toute proportion.
+-- -----------------------------------------------------------------------------
+
+-- Solde courant. Dénormalisé, comme promo_codes.used_count : le journal
+-- ci-dessous reste la vérité, mais l'affichage ne doit pas resommer
+-- l'historique à chaque ouverture de l'écran.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS loyalty_points INTEGER NOT NULL DEFAULT 0;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_loyalty_points_check') THEN
+    ALTER TABLE users ADD CONSTRAINT users_loyalty_points_check CHECK (loyalty_points >= 0);
+  END IF;
+END $$;
+
+
+-- -----------------------------------------------------------------------------
+-- Réglages
+-- -----------------------------------------------------------------------------
+-- Table à ligne unique, comme free_shipping_settings : chaque réglage garde son
+-- type et ses contraintes, plutôt qu'un magasin clé/valeur où tout serait du
+-- texte et où un seuil négatif passerait sans bruit.
+CREATE TABLE IF NOT EXISTS loyalty_settings (
+  id              INTEGER PRIMARY KEY DEFAULT 1,
+
+  is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+
+  -- Points à atteindre pour déclencher un bon (1 point = 1 FCFA de produits).
+  threshold_points INTEGER NOT NULL DEFAULT 30000,
+
+  -- Diviseur appliqué au cumul converti pour obtenir la valeur du bon.
+  value_divisor   INTEGER NOT NULL DEFAULT 40,
+
+  -- Bornes du résultat. Le cahier des charges annonce « 750 à 1 000 FCFA » :
+  -- ce sont ces deux valeurs.
+  voucher_min     NUMERIC(12,2) NOT NULL DEFAULT 750,
+  voucher_max     NUMERIC(12,2) NOT NULL DEFAULT 1000,
+
+  -- Durée de vie du bon. Sans expiration, les bons non utilisés s'accumulent
+  -- indéfiniment au passif sans qu'on puisse jamais les solder.
+  validity_days   INTEGER NOT NULL DEFAULT 60,
+
+  updated_at      TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT loyalty_settings_singleton CHECK (id = 1),
+  CONSTRAINT loyalty_settings_threshold CHECK (threshold_points > 0),
+  CONSTRAINT loyalty_settings_divisor   CHECK (value_divisor > 0),
+  CONSTRAINT loyalty_settings_min       CHECK (voucher_min > 0),
+  -- Un plancher au-dessus du plafond rendrait le calcul incohérent.
+  CONSTRAINT loyalty_settings_bornes    CHECK (voucher_max >= voucher_min),
+  CONSTRAINT loyalty_settings_validity  CHECK (validity_days BETWEEN 1 AND 365)
+);
+
+INSERT INTO loyalty_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+
+DROP TRIGGER IF EXISTS trigger_loyalty_settings_updated_at ON loyalty_settings;
+CREATE TRIGGER trigger_loyalty_settings_updated_at
+  BEFORE UPDATE ON loyalty_settings
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+
+-- -----------------------------------------------------------------------------
+-- Journal des points
+-- -----------------------------------------------------------------------------
+-- Sans lui, un solde est un nombre que personne ne peut justifier. Le service
+-- client doit pouvoir répondre à « pourquoi ai-je 12 400 points ? » ligne par
+-- ligne, et à « pourquoi ai-je perdu mes points ? » après une annulation.
+CREATE TABLE IF NOT EXISTS loyalty_ledger (
+  id          SERIAL PRIMARY KEY,
+  user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+
+  -- Positif à l'acquisition, négatif à la conversion ou à la reprise.
+  delta       INTEGER NOT NULL,
+
+  -- 'earned'    : points gagnés sur une commande
+  -- 'converted' : solde transformé en bon
+  -- 'revoked'   : points repris (commande annulée ou remboursée)
+  -- 'manual'    : correction faite par un administrateur
+  reason      VARCHAR(20) NOT NULL,
+
+  order_id    INTEGER REFERENCES orders(id) ON DELETE SET NULL,
+
+  -- Bon émis, quand la ligne est une conversion.
+  promo_code_id INTEGER REFERENCES promo_codes(id) ON DELETE SET NULL,
+
+  -- Solde APRÈS l'opération : rend le journal lisible sans recalcul, et permet
+  -- de détecter une incohérence entre le journal et users.loyalty_points.
+  balance_after INTEGER NOT NULL,
+
+  created_at  TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT loyalty_ledger_reason_check
+    CHECK (reason IN ('earned', 'converted', 'revoked', 'manual')),
+  CONSTRAINT loyalty_ledger_delta_check  CHECK (delta <> 0),
+  CONSTRAINT loyalty_ledger_solde_check  CHECK (balance_after >= 0)
+);
+
+CREATE INDEX IF NOT EXISTS idx_loyalty_ledger_user
+  ON loyalty_ledger (user_id, created_at DESC);
+
+-- Une commande ne doit créditer des points qu'une seule fois. L'index partiel
+-- rend le doublon impossible même si le code était appelé deux fois.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_loyalty_ledger_commande_unique
+  ON loyalty_ledger (order_id)
+  WHERE reason = 'earned' AND order_id IS NOT NULL;
+
+
+-- -----------------------------------------------------------------------------
+-- Le bon de fidélité est un code promo nominatif
+-- -----------------------------------------------------------------------------
+-- Plutôt qu'un système de bons parallèle, on réutilise promo_codes : la
+-- validation des dates, du montant minimum, des quotas, le recalcul serveur de
+-- la remise, l'affichage au paiement, la colonne dans la liste des commandes et
+-- la mention dans les emails existent déjà et sont éprouvés.
+--
+-- NULL  = code public, comme aujourd'hui.
+-- Rempli = bon nominatif, utilisable par ce seul client.
+-- -----------------------------------------------------------------------------
+ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS user_id INTEGER
+  REFERENCES users(id) ON DELETE CASCADE;
+
+-- Distingue un bon de fidélité d'un code promo nominatif offert à la main.
+ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS is_loyalty_reward BOOLEAN NOT NULL DEFAULT FALSE;
+
+CREATE INDEX IF NOT EXISTS idx_promo_codes_user ON promo_codes (user_id) WHERE user_id IS NOT NULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'promo_codes_loyalty_check') THEN
+    -- Un bon de fidélité est nécessairement nominatif : sans propriétaire, il
+    -- serait utilisable par n'importe qui.
+    ALTER TABLE promo_codes ADD CONSTRAINT promo_codes_loyalty_check
+      CHECK (NOT is_loyalty_reward OR user_id IS NOT NULL);
+  END IF;
+END $$;
 
 
 -- Fin du script

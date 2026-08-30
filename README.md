@@ -60,6 +60,15 @@
     *   Livraison offerte au client dont les achats atteignent un seuil sur une fenêtre glissante (par défaut 100 000 FCFA sur 7 jours).
     *   L'avantage se gagne à un moment et se consomme à un autre : il est tracé, valable un temps limité, et utilisable une seule fois.
     *   Seuil, fenêtre et durée de validité réglables depuis le panel, sans nouvelle version de l'application.
+*   **Programme de fidélité :**
+    *   Le client gagne 1 point par FCFA de produits (hors livraison). À 30 000 points, un bon lui est attribué automatiquement à la validation de sa commande, et son solde repart de zéro.
+    *   La valeur du bon est le cumul divisé par 40, borné entre 750 et 1 000 FCFA — ce qui explique la fourchette annoncée aux clients.
+    *   Le bon est un code promo nominatif : il réutilise la validation des codes promo (dates, quotas, recalcul serveur de la remise). Présenté par un autre client, il est refusé avec le message d'un code inconnu, pour ne pas confirmer son existence.
+    *   Une commande annulée ou remboursée reprend ses points ; le bon déjà émis reste acquis. Un journal permet de justifier tout solde ligne à ligne.
+    *   Seuil, diviseur, bornes du bon et durée de validité sont réglables depuis le panel.
+*   **Campagnes email :**
+    *   Composition d'une campagne, ciblage (tous les clients, liste manuelle, ou filtre : jamais commandé, inactif depuis N jours, panier abandonné depuis N heures), envoi immédiat ou programmé.
+    *   Un planificateur `node-cron` déclenche les campagnes arrivées à échéance. Les destinataires sont figés au moment de l'envoi, pas à la création.
 *   **Sécurité :**
     *   Middleware pour vérifier le token JWT.
     *   Middleware pour vérifier le rôle administrateur.
@@ -98,6 +107,10 @@
     *   Saisie de l'adresse avec sélecteurs pays et ville alimentés par la grille de livraison du serveur.
     *   Saisie d'un code promo, avec message de refus explicite et revalidation silencieuse quand le panier change.
     *   Progression vers la livraison gratuite, et frais barrés lorsque l'avantage s'applique.
+*   **Ma fidélité :**
+    *   Solde de points, progression vers le prochain bon et montant estimé de celui-ci.
+    *   Bons utilisables, avec leur date d'expiration et un bouton pour copier le code.
+    *   Historique des points en français (gagnés, convertis, repris).
 *   **Profil Utilisateur :**
     *   Affiche les informations de base de l'utilisateur.
     *   Bouton de déconnexion fonctionnel.
@@ -121,6 +134,7 @@
 *   **Codes Promo :** Création, modification, activation et suppression des codes ; statut calculé (actif, expiré, à venir, épuisé) et compteur d'utilisations. Le code utilisé et la remise apparaissent dans la liste des commandes et dans leur détail.
 *   **Zones de Livraison :** Gestion des zones, de leurs villes desservies et de leurs tarifs, avec tarif par défaut par pays et zone de repli.
 *   **Livraison Gratuite :** Réglage du seuil, de la fenêtre glissante et de la durée de validité ; suivi des avantages gagnés et consommés.
+*   **Fidélité :** Réglage du seuil, du diviseur, des bornes du bon et de sa durée de validité, avec un récapitulatif en clair de l'effet obtenu. Compteurs (points en circulation, bons émis, utilisés, expirés) et classement des clients par points.
 *   **Rapports & Finance :** Page placeholder.
 
 ## Installation et Lancement
@@ -169,7 +183,7 @@ le code à 6 chiffres demandé à la connexion client.
 *   Gestion des images (upload serveur au lieu d'URLs externes).
 *   Fonctionnalités de recherche avancée.
 *   Système d'avis et de notation des produits.
-*   Notifications push.
+*   Notifications push (les notifications in-app et les campagnes email sont en place).
 *   Tests (unitaires, intégration, e2e).
 *   Déploiement.
 

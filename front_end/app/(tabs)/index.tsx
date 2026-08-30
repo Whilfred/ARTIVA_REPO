@@ -7,7 +7,6 @@ import {
   ScrollView,
   Text as DefaultText,
   RefreshControl,
-  Alert,
   Platform,
   Linking,
   Image,
@@ -17,6 +16,7 @@ import {
   TouchableOpacity,
   TextInput,
 } from "react-native";
+import { Alert } from "../../constants/Alerte"; // Alert.alert est inopérant sur le web — voir ce fichier
 import ScrollSection from "../../components/ScrollSection";
 import CategoryCard, {
   Category as CategoryType,

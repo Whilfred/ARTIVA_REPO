@@ -1,6 +1,7 @@
 // ARTIVA/back_end/controllers/orderController.js
 const db = require('../config/db');
 const promoController = require('../controllers/promoController');
+const loyaltyController = require('../controllers/loyaltyController');
 const livraisonController = require('../controllers/livraisonController');
 const { resoudreZone } = require('../utils/shipping');
 const { v4: uuidv4 } = require('uuid');
@@ -292,6 +293,21 @@ exports.createOrder = async (req, res) => {
       console.error('Erreur évaluation livraison gratuite:', avantageError);
     }
 
+    // 5 ter. Points de fidélité. Comptés sur le montant des produits AVANT
+    // remise et hors livraison : c'est la même assiette que le seuil de
+    // livraison gratuite, pour que deux mécaniques voisines ne donnent pas des
+    // chiffres différents sur la même commande.
+    //
+    // Un échec ici ne doit pas non plus faire perdre la commande.
+    let gainFidelite = null;
+    try {
+      gainFidelite = await loyaltyController.crediterPoints(
+        client, userId, createdOrder.id, productsTotal
+      );
+    } catch (fideliteError) {
+      console.error('Erreur attribution des points de fidélité:', fideliteError);
+    }
+
     // 6. ENVOI DES EMAILS
     try {
       const adminEmail = process.env.ADMIN_EMAIL || "artiva.app@gmail.com";
@@ -315,6 +331,7 @@ exports.createOrder = async (req, res) => {
         // Sans ces deux champs, l'email laisserait croire à un oubli de frais.
         free_shipping_applied: livraisonOfferte,
         shipping_normal: fraisNormaux,
+        loyalty: gainFidelite,
         free_shipping_earned: avantageGagne
           ? { expires_at: avantageGagne.expires_at, amount: avantageGagne.qualifying_amount }
           : null,
@@ -551,6 +568,28 @@ exports.updateOrderStatusAdmin = async (req, res) => {
           await client.query(updatePaymentQuery, [payment.id]);
           console.log(`Paiement COD #${payment.id} pour la commande ${orderId} marqué comme 'succeeded'.`);
         }
+      }
+    }
+
+    // Étape 1 ter : Une commande annulée ou remboursée ne doit plus rapporter
+    // de points. Sans cette reprise, un client pourrait commander, encaisser
+    // ses points, annuler, et recommencer indéfiniment.
+    //
+    // Le bon déjà émis n'est pas repris : le client l'a peut-être utilisé, et
+    // le lui retirer après coup serait incompréhensible.
+    if (newStatus === 'cancelled' || newStatus === 'refunded') {
+      try {
+        const reprise = await loyaltyController.reprendrePoints(client, orderId);
+        if (reprise) {
+          console.log(
+            `Commande ${orderId} ${newStatus} : ${reprise.reprise} point(s) repris, `
+            + `nouveau solde ${reprise.solde}.`
+          );
+        }
+      } catch (fideliteError) {
+        // La reprise ne doit pas empêcher le changement de statut : une
+        // commande qu'on ne peut pas annuler serait un problème bien pire.
+        console.error('Erreur reprise des points de fidélité:', fideliteError);
       }
     }
 

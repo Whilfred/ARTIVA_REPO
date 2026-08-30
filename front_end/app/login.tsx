@@ -12,10 +12,10 @@ import {
   Platform,
   SafeAreaView,
   ScrollView,
-  Alert,
   useColorScheme,
   Dimensions,
 } from "react-native";
+import { Alert } from "../constants/Alerte"; // Alert.alert est inopérant sur le web — voir ce fichier
 import { useRouter, Link } from "expo-router";
 import { FontAwesome, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import Colors from "../constants/Colors";

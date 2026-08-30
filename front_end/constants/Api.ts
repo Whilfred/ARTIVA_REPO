@@ -90,13 +90,32 @@ function resolveLocalHost(): string {
  * EXPO_PUBLIC_API_BASE_URL (dans front_end/.env), utile par exemple pour tester
  * l'app locale contre le serveur de production.
  */
-// export const API_BASE_URL =
-//   process.env.EXPO_PUBLIC_API_BASE_URL ??
-//   `http://${resolveLocalHost()}:${LOCAL_API_PORT}/api`;
-// -----------------------------------------------------------------------------
-// PRODUCTION
-// -----------------------------------------------------------------------------
-export const API_BASE_URL = "https://artiva-service.onrender.com/api";
+// Serveur déployé, utilisé par les applications distribuées aux clients.
+const API_PRODUCTION = "https://artiva-service.onrender.com/api";
+
+/**
+ * Trois niveaux, du plus explicite au plus automatique :
+ *
+ *   1. EXPO_PUBLIC_API_BASE_URL, si elle est renseignée dans front_end/.env.
+ *      Permet de viser n'importe quel serveur sans toucher au code — par
+ *      exemple tester l'application locale contre la production.
+ *
+ *   2. En DÉVELOPPEMENT (`npx expo start`), le backend de cette machine.
+ *
+ *   3. En PRODUCTION (build EAS), le serveur déployé.
+ *
+ * Le test sur __DEV__ règle un aller-retour qui se répétait à chaque fusion :
+ * l'adresse était écrite en dur, si bien qu'elle était juste pour l'un et
+ * fausse pour l'autre selon qui avait poussé en dernier. Pire, un jeton obtenu
+ * du serveur local était ensuite envoyé à la production, qui le refusait avec
+ * « Token invalide ou expiré » — sans que rien n'indique la vraie cause.
+ *
+ * Désormais personne n'a plus à modifier cette ligne : `expo start` vise le
+ * local, un build vise la production.
+ */
+export const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_BASE_URL ??
+  (__DEV__ ? `http://${resolveLocalHost()}:${LOCAL_API_PORT}/api` : API_PRODUCTION);
 
 // Affiché au démarrage : permet de vérifier d'un coup d'œil, dans les logs Metro,
 // sur quel serveur l'application est branchée.

@@ -13,6 +13,7 @@ import ProductTagsPage from './pages/ProductTagsPage';
 import PromoCodesPage from './pages/PromoCodesPage';
 import FreeShippingPage from './pages/FreeShippingPage';
 import ShippingZonesPage from './pages/ShippingZonesPage';
+import LoyaltyPage from './pages/LoyaltyPage';
 import CampaignsPage from './pages/CampaignsPage';
 import { Mail } from 'lucide-react';
 
@@ -21,7 +22,7 @@ import './App.css';
 import {
   LayoutDashboard, ShoppingCart, Tag, Users, Settings, BarChart2,
   LogOut as LogOutIcon, ShieldCheck, FolderTree, ListOrdered,
-  ScanLine as ScanIcon, Menu as MenuIcon, X as XIcon, Ticket, Truck, MapPin
+  ScanLine as ScanIcon, Menu as MenuIcon, X as XIcon, Ticket, Truck, MapPin, Award
 } from 'lucide-react';
 
 // Composant pour la Sidebar
@@ -36,6 +37,7 @@ const Sidebar = ({ handleLogout, isMobileOpen, onCloseMobile }) => {
     { path: "/users", label: "Utilisateurs", Icon: Users },
     { path: "/orders", label: "Commandes", Icon: ListOrdered },
     { path: "/promo-codes", label: "Codes Promo", Icon: Ticket },
+    { path: "/fidelite", label: "Fidélité", Icon: Award },
     { path: "/zones-livraison", label: "Zones de Livraison", Icon: MapPin },
     { path: "/livraison-gratuite", label: "Livraison Gratuite", Icon: Truck },
     { path: "/reports", label: "Reports", Icon: BarChart2 },
@@ -148,6 +150,7 @@ function App() {
         <Route path="/users" element={<ProtectedRoute><UserManagementPage /></ProtectedRoute>}/>
         <Route path="/orders" element={<ProtectedRoute><OrderManagementPage /></ProtectedRoute>}/>
         <Route path="/promo-codes" element={<ProtectedRoute><PromoCodesPage /></ProtectedRoute>}/>
+        <Route path="/fidelite" element={<ProtectedRoute><LoyaltyPage /></ProtectedRoute>}/>
         <Route path="/zones-livraison" element={<ProtectedRoute><ShippingZonesPage /></ProtectedRoute>}/>
         <Route path="/livraison-gratuite" element={<ProtectedRoute><FreeShippingPage /></ProtectedRoute>}/>
         <Route path="/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
