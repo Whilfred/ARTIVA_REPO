@@ -2,20 +2,19 @@
 //
 // Programme de fidélité.
 //
-// Le client accumule des points à chaque achat (1 point = 1 FCFA de produits,
-// hors livraison). Dès que son solde atteint le seuil, un bon nominatif lui est
-// attribué automatiquement à la validation de la commande, et son solde repart
-// de zéro.
+// Le client accumule des points à chaque achat selon le diviseur en fonction du total dépensé.
+// Dès que son solde atteint 30000 points, un bon nominatif lui est attribué automatiquement
+// et son solde repart de zéro.
 //
-// Le bon n'est pas un objet à part : c'est une ligne de promo_codes rattachée à
-// un client. Toute la validation — dates, montant minimum, quotas, recalcul
-// serveur de la remise — est ainsi celle des codes promo, déjà éprouvée, plutôt
-// qu'une seconde implémentation qui finirait par diverger.
+// Diviseurs :
+// - 0 - 99 999 FCFA : 40
+// - 100 000 - 199 999 FCFA : 50
+// - 200 000 - 299 999 FCFA : 55
+// - 300 000 - 999 999 FCFA : 60
+// - 1 000 000+ FCFA : 70
 
 const db = require('../config/db');
 
-// Valeurs de repli si la table de réglages est vide : le programme ne doit pas
-// planter une commande parce qu'une ligne de configuration manque.
 const REGLAGES_DEFAUT = {
   is_active: true,
   threshold_points: 30000,
@@ -25,9 +24,6 @@ const REGLAGES_DEFAUT = {
   validity_days: 60,
 };
 
-// Les commandes annulées ou remboursées ne rapportent rien. Même règle que la
-// livraison gratuite (voir livraisonController.js), pour que les deux mécaniques
-// ne donnent pas des réponses différentes sur la même commande.
 const STATUTS_EXCLUS = ['cancelled', 'refunded'];
 
 async function lireReglages(client) {
@@ -47,28 +43,22 @@ async function lireReglages(client) {
 }
 
 /**
- * Valeur du bon, à partir du solde converti.
- *
- * Règle métier : le cumul divisé par 40. 30 000 donnent 750, 40 000 donnent
- * 1 000 — c'est ce qui produit la fourchette annoncée au client.
- *
- * Le plancher et le plafond ne sont pas décoratifs : sans eux, une commande
- * exceptionnelle qui ferait bondir le solde à 200 000 émettrait un bon de
- * 5 000 FCFA, très au-delà de ce que le programme annonce.
+ * Détermine le diviseur en fonction du total dépensé
  */
+function getDivisor(totalSpent) {
+  if (totalSpent < 100000) return 40;
+  if (totalSpent < 200000) return 50;
+  if (totalSpent < 300000) return 55;
+  if (totalSpent < 1000000) return 60;
+  return 70;
+}
+
 function calculerValeurBon(soldeConverti, reglages) {
   const brut = soldeConverti / reglages.value_divisor;
   const borne = Math.min(Math.max(brut, reglages.voucher_min), reglages.voucher_max);
-  // Le FCFA n'a pas de subdivision : un bon de 787,5 n'existe pas.
   return Math.round(borne);
 }
 
-/**
- * Fabrique un code lisible et unique.
- *
- * Sans I, O, 0 ni 1 : ces caractères se confondent à la lecture, et le client
- * doit pouvoir recopier son code depuis l'application sans se tromper.
- */
 function genererCode() {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let suffixe = '';
@@ -79,128 +69,145 @@ function genererCode() {
 }
 
 /**
- * Crédite les points d'une commande et, si le seuil est franchi, émet le bon.
- *
- * Appelée DANS la transaction de création de commande : si la commande échoue,
- * les points ne sont pas accordés. Le contraire laisserait un solde crédité
- * pour une commande inexistante.
- *
- * @param {object} client  transaction en cours
- * @param {number} montantProduits  total produits, hors livraison et hors remise
- * @returns {null | {points, solde, bon}} ce qu'il faut annoncer au client
+ * Crédite les points et génère un bon cumulé si le seuil est atteint
  */
 async function crediterPoints(client, userId, orderId, montantProduits) {
+  console.log('🔍 crediterPoints - Début');
+  console.log('👤 userId:', userId);
+  console.log('💰 montantProduits:', montantProduits);
+  
   const reglages = await lireReglages(client);
-  if (!reglages.is_active) return null;
+  console.log('⚙️ reglages:', reglages);
+  
+  if (!reglages.is_active) {
+    console.log('❌ Programme inactif');
+    return null;
+  }
 
-  const points = Math.floor(montantProduits);
-  if (points <= 0) return null;
-
-  // FOR UPDATE : deux commandes simultanées du même client liraient sinon le
-  // même solde et le franchissement du seuil serait compté deux fois.
   const { rows: utilisateurs } = await client.query(
-    'SELECT loyalty_points FROM users WHERE id = $1 FOR UPDATE',
+    'SELECT loyalty_points, total_spent FROM users WHERE id = $1 FOR UPDATE',
     [userId]
   );
   if (utilisateurs.length === 0) return null;
 
+  const currentTotalSpent = parseFloat(utilisateurs[0].total_spent || 0);
+  const nouveauTotalSpent = currentTotalSpent + montantProduits;
+  
+  // 🔥 Déterminer le diviseur selon le NOUVEAU total
+  const divisor = getDivisor(nouveauTotalSpent);
+  console.log(`📊 Diviseur pour ${nouveauTotalSpent} FCFA: ${divisor}`);
+  
+  // 🔥 Calculer les points : montant / diviseur
+  const points = Math.floor(montantProduits / divisor);
+  console.log(`📊 points calculés (${montantProduits}/${divisor}): ${points}`);
+  
+  if (points <= 0) {
+    console.log('❌ points <= 0, retour null');
+    return null;
+  }
+
   const soldeApres = utilisateurs[0].loyalty_points + points;
 
-  await client.query('UPDATE users SET loyalty_points = $1 WHERE id = $2', [
-    soldeApres,
-    userId,
-  ]);
   await client.query(
-    `INSERT INTO loyalty_ledger (user_id, delta, reason, order_id, balance_after)
-     VALUES ($1, $2, 'earned', $3, $4)`,
-    [userId, points, orderId, soldeApres]
+    'UPDATE users SET loyalty_points = $1, total_spent = $2 WHERE id = $3',
+    [soldeApres, nouveauTotalSpent, userId]
   );
+  await client.query(
+    `INSERT INTO loyalty_ledger (user_id, delta, reason, order_id, balance_after, total_spent_after)
+     VALUES ($1, $2, 'earned', $3, $4, $5)`,
+    [userId, points, orderId, soldeApres, nouveauTotalSpent]
+  );
+  
+  console.log(`✅ Points crédités: +${points}, nouveau solde: ${soldeApres}`);
 
-  if (soldeApres < reglages.threshold_points) {
+  // Si le seuil est atteint (30 000 points)
+  if (soldeApres >= reglages.threshold_points) {
+    const nombreBons = Math.floor(soldeApres / reglages.threshold_points);
+    const pointsUtilises = nombreBons * reglages.threshold_points;
+    const pointsRestants = soldeApres - pointsUtilises;
+    
+    // 🔥 Valeur du bon = points utilisés / diviseur actuel
+    const valeurBon = Math.floor(pointsUtilises / divisor);
+    console.log(`📊 ${nombreBons} bon(s) cumulés, valeur: ${valeurBon} FCFA (diviseur: ${divisor})`);
+    
+    const expiration = new Date();
+    expiration.setDate(expiration.getDate() + reglages.validity_days);
+
+    // 🔥 Générer UN SEUL bon cumulé
+    let bon = null;
+    for (let essai = 0; essai < 5 && !bon; essai++) {
+      try {
+        const { rows } = await client.query(
+          `INSERT INTO promo_codes
+             (code, description, discount_type, discount_value, min_purchase_amount,
+              expires_at, max_uses, max_uses_per_user, is_active, user_id, is_loyalty_reward)
+           VALUES ($1, $2, 'fixed', $3, 0, $4, 1, 1, TRUE, $5, TRUE)
+           RETURNING *`,
+          [
+            genererCode(),
+            `Bon de fidélité — ${pointsUtilises.toLocaleString('fr-FR')} points convertis`,
+            valeurBon,
+            expiration,
+            userId,
+          ]
+        );
+        bon = rows[0];
+      } catch (error) {
+        if (error.code !== '23505') throw error;
+      }
+    }
+    if (!bon) throw new Error("Impossible de générer un code de fidélité unique.");
+
+    // Mettre à jour le solde
+    await client.query(
+      'UPDATE users SET loyalty_points = $1 WHERE id = $2',
+      [pointsRestants, userId]
+    );
+    
+    await client.query(
+      `INSERT INTO loyalty_ledger (user_id, delta, reason, order_id, promo_code_id, balance_after)
+       VALUES ($1, $2, 'converted', $3, $4, $5)`,
+      [userId, -pointsUtilises, orderId, bon.id, pointsRestants]
+    );
+    
+    console.log(`🎁 Bon généré: ${bon.code} (${valeurBon} FCFA)`);
+    console.log(`📊 Nouveau solde: ${pointsRestants} points`);
+
+    // Notification
+    const dateLisible = expiration.toLocaleDateString('fr-FR', {
+      day: 'numeric', month: 'long', year: 'numeric',
+    });
+    await client.query(
+      `INSERT INTO notifications (user_id, type, title, message, link_url)
+       VALUES ($1, 'promotion', $2, $3, $4)`,
+      [
+        userId,
+        `🎁 Vous avez gagné un bon de ${valeurBon.toLocaleString('fr-FR')} FCFA`,
+        `Vos ${pointsUtilises.toLocaleString('fr-FR')} points de fidélité vous donnent un bon de ` +
+          `${valeurBon.toLocaleString('fr-FR')} FCFA. Utilisez le code ${bon.code} lors de votre ` +
+          `prochaine commande, valable jusqu'au ${dateLisible}.`,
+        '/fidelite',
+      ]
+    );
+
     return {
       points,
-      solde: soldeApres,
-      restant: reglages.threshold_points - soldeApres,
-      bon: null,
+      solde: pointsRestants,
+      restant: Math.max(0, reglages.threshold_points - pointsRestants),
+      bon: { code: bon.code, valeur: valeurBon, expire_le: expiration, points_convertis: pointsUtilises },
     };
   }
 
-  // --- Seuil franchi : émission du bon ---------------------------------------
-  const valeur = calculerValeurBon(soldeApres, reglages);
-  const expiration = new Date();
-  expiration.setDate(expiration.getDate() + reglages.validity_days);
-
-  // Le tirage aléatoire peut théoriquement retomber sur un code existant.
-  // On réessaie plutôt que de laisser la contrainte d'unicité faire échouer
-  // toute la commande pour une collision à une chance sur un milliard.
-  let bon = null;
-  for (let essai = 0; essai < 5 && !bon; essai++) {
-    try {
-      const { rows } = await client.query(
-        `INSERT INTO promo_codes
-           (code, description, discount_type, discount_value, min_purchase_amount,
-            expires_at, max_uses, max_uses_per_user, is_active, user_id, is_loyalty_reward)
-         VALUES ($1, $2, 'fixed', $3, 0, $4, 1, 1, TRUE, $5, TRUE)
-         RETURNING *`,
-        [
-          genererCode(),
-          `Bon de fidélité — ${soldeApres.toLocaleString('fr-FR')} points convertis`,
-          valeur,
-          expiration,
-          userId,
-        ]
-      );
-      bon = rows[0];
-    } catch (error) {
-      if (error.code !== '23505') throw error; // 23505 = collision de code
-    }
-  }
-  if (!bon) throw new Error("Impossible de générer un code de fidélité unique.");
-
-  // Le solde repart de zéro : c'est l'intégralité du cumul qui a été convertie,
-  // ce qui est cohérent avec une valeur de bon calculée sur ce même cumul.
-  await client.query('UPDATE users SET loyalty_points = 0 WHERE id = $1', [userId]);
-  await client.query(
-    `INSERT INTO loyalty_ledger (user_id, delta, reason, order_id, promo_code_id, balance_after)
-     VALUES ($1, $2, 'converted', $3, $4, 0)`,
-    [userId, -soldeApres, orderId, bon.id]
-  );
-
-  // Notification dans l'application. Sans elle, le client ne découvrirait son
-  // bon qu'en ouvrant par hasard le bon écran — et beaucoup ne le feraient pas.
-  const dateLisible = expiration.toLocaleDateString('fr-FR', {
-    day: 'numeric', month: 'long', year: 'numeric',
-  });
-  await client.query(
-    `INSERT INTO notifications (user_id, type, title, message, link_url)
-     VALUES ($1, 'promotion', $2, $3, $4)`,
-    [
-      userId,
-      `🎁 Vous avez gagné un bon de ${valeur.toLocaleString('fr-FR')} FCFA`,
-      `Vos ${soldeApres.toLocaleString('fr-FR')} points de fidélité vous donnent un bon de ` +
-        `${valeur.toLocaleString('fr-FR')} FCFA. Utilisez le code ${bon.code} lors de votre ` +
-        `prochaine commande, valable jusqu'au ${dateLisible}.`,
-      '/fidelite',
-    ]
-  );
-
   return {
     points,
-    solde: 0,
-    restant: reglages.threshold_points,
-    bon: { code: bon.code, valeur, expire_le: expiration, points_convertis: soldeApres },
+    solde: soldeApres,
+    restant: reglages.threshold_points - soldeApres,
+    bon: null,
   };
 }
 
 /**
- * Reprend les points d'une commande annulée ou remboursée.
- *
- * Sans cela, un client pourrait commander, encaisser ses points, annuler, et
- * recommencer indéfiniment.
- *
- * Le bon déjà émis n'est PAS repris : le client l'a peut-être déjà utilisé, et
- * lui retirer après coup serait incompréhensible. Le solde peut donc devenir
- * négatif en théorie ; on le ramène à zéro, la contrainte de la base l'exige.
+ * Reprend les points d'une commande annulée
  */
 async function reprendrePoints(client, orderId) {
   const { rows } = await client.query(
@@ -213,40 +220,140 @@ async function reprendrePoints(client, orderId) {
   const { user_id: userId, delta } = rows[0];
 
   const { rows: u } = await client.query(
-    'SELECT loyalty_points FROM users WHERE id = $1 FOR UPDATE',
+    'SELECT loyalty_points, total_spent FROM users WHERE id = $1 FOR UPDATE',
     [userId]
   );
   if (u.length === 0) return null;
+
+  const { rows: orderTotal } = await client.query(
+    'SELECT total_amount FROM orders WHERE id = $1',
+    [orderId]
+  );
+  const orderAmount = orderTotal.length > 0 ? parseFloat(orderTotal[0].total_amount) : 0;
+  const nouveauTotalSpent = Math.max(0, parseFloat(u[0].total_spent || 0) - orderAmount);
+  const divisor = getDivisor(nouveauTotalSpent);
 
   const soldeApres = Math.max(0, u[0].loyalty_points - delta);
   const reprise = u[0].loyalty_points - soldeApres;
   if (reprise === 0) return null;
 
-  await client.query('UPDATE users SET loyalty_points = $1 WHERE id = $2', [soldeApres, userId]);
   await client.query(
-    `INSERT INTO loyalty_ledger (user_id, delta, reason, order_id, balance_after)
-     VALUES ($1, $2, 'revoked', $3, $4)`,
-    [userId, -reprise, orderId, soldeApres]
+    'UPDATE users SET loyalty_points = $1, total_spent = $2 WHERE id = $3',
+    [soldeApres, nouveauTotalSpent, userId]
   );
-  return { reprise, solde: soldeApres };
+  await client.query(
+    `INSERT INTO loyalty_ledger (user_id, delta, reason, order_id, balance_after, total_spent_after)
+     VALUES ($1, $2, 'revoked', $3, $4, $5)`,
+    [userId, -reprise, orderId, soldeApres, nouveauTotalSpent]
+  );
+  return { reprise, solde: soldeApres, totalSpent: nouveauTotalSpent };
+}
+
+/**
+ * Initialisation des anciennes commandes
+ */
+async function initialiserPointsUtilisateur(client, userId) {
+  console.log('🔄 Initialisation des points pour l\'utilisateur:', userId);
+  
+  const currentClient = client || db;
+  
+  const { rows: totalOrders } = await currentClient.query(
+    `SELECT COALESCE(SUM(total_amount), 0) AS total_spent,
+            COUNT(*) AS total_orders
+     FROM orders 
+     WHERE user_id = $1 
+       AND status NOT IN ('cancelled', 'refunded')`,
+    [userId]
+  );
+  
+  const totalSpent = parseFloat(totalOrders[0]?.total_spent || 0);
+  const totalOrdersCount = parseInt(totalOrders[0]?.total_orders || 0);
+  
+  console.log(`📊 Utilisateur ${userId}: ${totalOrdersCount} commandes, total: ${totalSpent} FCFA`);
+  
+  if (totalOrdersCount === 0) {
+    console.log('ℹ️ Aucune commande trouvée, pas d\'initialisation');
+    return false;
+  }
+  
+  const { rows: user } = await currentClient.query(
+    'SELECT loyalty_points, total_spent FROM users WHERE id = $1',
+    [userId]
+  );
+  
+  const currentPoints = user[0]?.loyalty_points || 0;
+  const currentTotalSpent = parseFloat(user[0]?.total_spent || 0);
+  
+  if (currentPoints > 0 && currentTotalSpent > 0) {
+    console.log(`✅ Utilisateur déjà initialisé (${currentPoints} points)`);
+    return false;
+  }
+  
+  // 🔥 Déterminer le diviseur selon le total
+  const divisor = getDivisor(totalSpent);
+  console.log(`📊 Diviseur pour ${totalSpent} FCFA: ${divisor}`);
+  
+  // 🔥 Calculer les points : total / diviseur
+  const points = Math.floor(totalSpent / divisor);
+  console.log(`📊 Points calculés (${totalSpent}/${divisor}): ${points}`);
+  
+  await currentClient.query(
+    'UPDATE users SET loyalty_points = $1, total_spent = $2 WHERE id = $3',
+    [points, totalSpent, userId]
+  );
+  
+  await currentClient.query(
+    `INSERT INTO loyalty_ledger (user_id, delta, reason, balance_after, total_spent_after)
+     VALUES ($1, $2, 'initialized', $3, $4)`,
+    [userId, points, points, totalSpent]
+  );
+  
+  console.log(`✅ Utilisateur ${userId} initialisé avec ${points} points (diviseur: ${divisor})`);
+  console.log(`ℹ️ Les bons seront générés lors des prochaines commandes`);
+  
+  return true;
 }
 
 // =============================================================================
 // CÔTÉ CLIENT
 // =============================================================================
 
-// GET /api/fidelite — solde, progression, bons et historique.
 exports.monStatut = async (req, res) => {
   try {
     const userId = req.user.id;
+    console.log('🔍 monStatut - userId:', userId);
+    
+    const { rows: check } = await db.query(
+      'SELECT loyalty_points, total_spent FROM users WHERE id = $1',
+      [userId]
+    );
+    
+    const hasPoints = check[0]?.loyalty_points > 0;
+    const hasTotalSpent = parseFloat(check[0]?.total_spent || 0) > 0;
+    
+    if (!hasPoints && !hasTotalSpent) {
+      const { rows: orders } = await db.query(
+        'SELECT COUNT(*)::int as count FROM orders WHERE user_id = $1 AND status NOT IN ($2, $3)',
+        [userId, 'cancelled', 'refunded']
+      );
+      
+      if (orders[0]?.count > 0) {
+        console.log(`🔄 Initialisation automatique pour l'utilisateur ${userId} (${orders[0].count} commandes)`);
+        await initialiserPointsUtilisateur(null, userId);
+      }
+    }
+    
     const reglages = await lireReglages();
 
-    const { rows: u } = await db.query('SELECT loyalty_points FROM users WHERE id = $1', [userId]);
+    const { rows: u } = await db.query(
+      'SELECT loyalty_points, total_spent FROM users WHERE id = $1',
+      [userId]
+    );
     if (u.length === 0) return res.status(404).json({ message: 'Utilisateur introuvable.' });
+    
     const solde = u[0].loyalty_points;
+    const totalSpent = parseFloat(u[0].total_spent || 0);
 
-    // Les bons du client, avec leur état réel. Un bon consommé apparaît dans
-    // promo_code_usages ; un bon périmé a simplement dépassé sa date.
     const { rows: bons } = await db.query(
       `SELECT p.id, p.code, p.discount_value AS valeur, p.expires_at,
               EXISTS (SELECT 1 FROM promo_code_usages pu WHERE pu.promo_code_id = p.id) AS utilise
@@ -275,13 +382,43 @@ exports.monStatut = async (req, res) => {
       [userId]
     );
 
+    // 🔥 BONUS DE BIENVENUE - 2 000 FCFA - 120 JOURS
+    const { rows: welcomeCheck } = await db.query(
+      `SELECT id FROM promo_codes 
+       WHERE user_id = $1 AND code LIKE 'BIENVENUE%'`,
+      [userId]
+    );
+    const hasWelcomeBonus = welcomeCheck.length > 0;
+
+    if (!hasWelcomeBonus) {
+      const { rows: ordersCount } = await db.query(
+        'SELECT COUNT(*)::int as count FROM orders WHERE user_id = $1',
+        [userId]
+      );
+      
+      if (ordersCount[0].count === 0) {
+        const code = `BIENVENUE${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 120); // 120 jours
+        
+        await db.query(
+          `INSERT INTO promo_codes 
+           (code, description, discount_type, discount_value, min_purchase_amount,
+            expires_at, max_uses, max_uses_per_user, is_active, user_id, is_loyalty_reward)
+           VALUES ($1, $2, 'fixed', $3, 0, $4, 1, 1, TRUE, $5, FALSE)`,
+          [code, 'Bonus de bienvenue - 2000 FCFA', 2000, expiresAt, userId]
+        );
+        
+        console.log(`🎁 Bonus de bienvenue créé pour l'utilisateur ${userId}: ${code} (valable 120 jours)`);
+      }
+    }
+
     return res.status(200).json({
       actif: reglages.is_active,
       solde,
+      total_spent: totalSpent,
       seuil: reglages.threshold_points,
       restant: Math.max(0, reglages.threshold_points - solde),
-      // Ce que vaudrait le bon si le seuil était atteint maintenant : permet
-      // d'annoncer un montant concret plutôt qu'une promesse vague.
       valeur_estimee: calculerValeurBon(Math.max(solde, reglages.threshold_points), reglages),
       validite_jours: reglages.validity_days,
       bons: bonsFormates,
@@ -297,7 +434,6 @@ exports.monStatut = async (req, res) => {
 // CÔTÉ ADMINISTRATION
 // =============================================================================
 
-// GET /api/fidelite/admin — réglages et vue d'ensemble.
 exports.statutAdmin = async (req, res) => {
   try {
     const reglages = await lireReglages();
@@ -337,7 +473,6 @@ exports.statutAdmin = async (req, res) => {
   }
 };
 
-// PUT /api/fidelite/admin — modifier les réglages.
 exports.modifierReglages = async (req, res) => {
   const champsAutorises = [
     'is_active', 'threshold_points', 'value_divisor',
@@ -363,9 +498,6 @@ exports.modifierReglages = async (req, res) => {
     );
     return res.status(200).json({ message: 'Réglages enregistrés.', reglages: rows[0] });
   } catch (error) {
-    // 23514 = contrainte CHECK : seuil négatif, plancher au-dessus du plafond,
-    // validité hors bornes. Le message de la base est illisible pour un
-    // administrateur, on explique à sa place.
     if (error.code === '23514') {
       return res.status(400).json({
         message:
@@ -379,7 +511,6 @@ exports.modifierReglages = async (req, res) => {
   }
 };
 
-// GET /api/fidelite/admin/clients — classement des clients par points.
 exports.listerClients = async (req, res) => {
   try {
     const { rows } = await db.query(
@@ -400,7 +531,6 @@ exports.listerClients = async (req, res) => {
   }
 };
 
-// Exposées à orderController, qui les appelle dans sa transaction.
 exports.crediterPoints = crediterPoints;
 exports.reprendrePoints = reprendrePoints;
 exports.calculerValeurBon = calculerValeurBon;

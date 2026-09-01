@@ -11,7 +11,10 @@
     "success": "Succès",
     "deactivate": "Désactiver",
     "retry": "Réessayer",
-    "unavailable": "N/A"
+    "unavailable": "N/A",
+    "copy": "Copier",
+    "use": "Utiliser",
+    "close": "Fermer"
   },
   "tabHeaders": {
     "home": "Accueil",
@@ -19,7 +22,8 @@
     "wishlist": "Souhaits",
     "cart": "Panier",
     "profile": "Profil",
-    "settings": "Paramètres"
+    "settings": "Paramètres",
+    "loyalty": "Fidélité"
   },
   "homePage": {
     "sections": {
@@ -76,55 +80,115 @@
     "remove": "Supprimer",
     "updateQuantity": "Mettre à jour la quantité"
   },
-   "editProfileScreen": {
-        "name": "Nom complet",
-        "address": "Adresse",
-        "phone": "Numéro de téléphone",
-        "save": "Enregistrer les modifications",
-        "nameRequired": "Le nom est requis",
-        "addressInvalid": "Adresse invalide",
-        "phoneInvalid": "Numéro de téléphone invalide",
-        "profileUpdated": "Profil mis à jour",
-        "noChanges": "Aucune modification détectée"
-    },
-    "changePasswordScreen": {
-        "currentPassword": "Mot de passe actuel",
-        "newPassword": "Nouveau mot de passe",
-        "confirmPassword": "Confirmer le nouveau mot de passe",
-        "updatePassword": "Mettre à jour le mot de passe",
-        "passwordMismatch": "Les mots de passe ne correspondent pas",
-        "passwordLength": "Le mot de passe doit contenir au moins 6 caractères",
-        "passwordUpdated": "Mot de passe mis à jour",
-        "logout": "Vous allez être déconnecté pour des raisons de sécurité"
-    },
-      "loginScreen": {
-        "title": "Connexion",
-        "email": "Adresse e-mail",
-        "password": "Mot de passe",
-        "loginButton": "Se connecter",
-        "registerLink": "Pas de compte ? S'inscrire",
-        "forgotPasswordLink": "Mot de passe oublié ?"
-    },
-   "WishlistScreen":{
-  "Empty" : "Votre liste de souhaits est vide." ,
-   "Tap" : "Appuyez sur le ❤️ sur les produits pour les ajouter."
+  "editProfileScreen": {
+    "name": "Nom complet",
+    "address": "Adresse",
+    "phone": "Numéro de téléphone",
+    "save": "Enregistrer les modifications",
+    "nameRequired": "Le nom est requis",
+    "addressInvalid": "Adresse invalide",
+    "phoneInvalid": "Numéro de téléphone invalide",
+    "profileUpdated": "Profil mis à jour",
+    "noChanges": "Aucune modification détectée"
   },
-   "loadingData": "Chargement des données...",
-    "tagScreen": {
-        "titlePrefix": "Produits:",
-        "defaultTitle": "Produits par Tag",
-        "missingTag": "Nom du tag manquant.",
-        "fetchError": "Erreur lors du chargement des produits pour le tag",
-        "invalidData": "Format de données produits inattendu.",
-        "fetchGenericError": "Impossible de charger les produits pour ce tag.",
-        "noProducts": "Aucun produit trouvé pour \"{{tag}}\""
+  "changePasswordScreen": {
+    "currentPassword": "Mot de passe actuel",
+    "newPassword": "Nouveau mot de passe",
+    "confirmPassword": "Confirmer le nouveau mot de passe",
+    "updatePassword": "Mettre à jour le mot de passe",
+    "passwordMismatch": "Les mots de passe ne correspondent pas",
+    "passwordLength": "Le mot de passe doit contenir au moins 6 caractères",
+    "passwordUpdated": "Mot de passe mis à jour",
+    "logout": "Vous allez être déconnecté pour des raisons de sécurité"
+  },
+  "loginScreen": {
+    "title": "Connexion",
+    "email": "Adresse e-mail",
+    "password": "Mot de passe",
+    "loginButton": "Se connecter",
+    "registerLink": "Pas de compte ? S'inscrire",
+    "forgotPasswordLink": "Mot de passe oublié ?"
+  },
+  "WishlistScreen": {
+    "Empty": "Votre liste de souhaits est vide.",
+    "Tap": "Appuyez sur le ❤️ sur les produits pour les ajouter."
+  },
+  "loadingData": "Chargement des données...",
+  "tagScreen": {
+    "titlePrefix": "Produits:",
+    "defaultTitle": "Produits par Tag",
+    "missingTag": "Nom du tag manquant.",
+    "fetchError": "Erreur lors du chargement des produits pour le tag",
+    "invalidData": "Format de données produits inattendu.",
+    "fetchGenericError": "Impossible de charger les produits pour ce tag.",
+    "noProducts": "Aucun produit trouvé pour \"{{tag}}\""
+  },
+  "categoryScreen": {
+    "defaultTitle": "Catégorie {{categoryId}}",
+    "missingCategoryId": "ID de catégorie manquant.",
+    "fetchError": "Erreur lors du chargement des produits pour la catégorie",
+    "invalidData": "Format de données produits inattendu.",
+    "fetchGenericError": "Impossible de charger les produits pour cette catégorie.",
+    "noProducts": "Aucun produit trouvé dans cette catégorie."
+  },
+
+  "loyaltyScreen": {
+    "title": "Fidélité & Récompenses",
+    "loading": "Chargement de vos récompenses...",
+    "notConnected": {
+      "title": "Connectez-vous pour voir vos récompenses",
+      "subtitle": "Gagnez des points, débloquez des bons et profitez d'avantages exclusifs",
+      "login": "Se connecter",
+      "register": "Créer un compte"
     },
-        "categoryScreen": {
-        "defaultTitle": "Catégorie {{categoryId}}",
-        "missingCategoryId": "ID de catégorie manquant.",
-        "fetchError": "Erreur lors du chargement des produits pour la catégorie",
-        "invalidData": "Format de données produits inattendu.",
-        "fetchGenericError": "Impossible de charger les produits pour cette catégorie.",
-        "noProducts": "Aucun produit trouvé dans cette catégorie."
+    "welcomeBonus": {
+      "title": "🎉 Bonus de Bienvenue !",
+      "description": "Profitez de votre bon d'achat de {{value}} FCFA offert à votre inscription !",
+      "expiry": "⏰ Valable 30 jours"
+    },
+    "points": {
+      "label": "Points de fidélité",
+      "totalSpent": "Total dépensé",
+      "nextReward": "Prochaine récompense",
+      "remaining": "{{points}} points restants",
+      "progress": "{{current}} / {{total}} points"
+    },
+    "vouchers": {
+      "available": "🎁 Bons disponibles ({{count}})",
+      "empty": "Aucun bon disponible",
+      "emptySubtext": "Continuez vos achats pour débloquer des récompenses !",
+      "code": "Code: {{code}}",
+      "expires": "⏰ Expire le: {{date}}",
+      "copy": "Copier",
+      "use": "Utiliser",
+      "used": "✅ Bons utilisés ({{count}})",
+      "usedLabel": "Utilisé le: {{date}}"
+    },
+    "rules": {
+      "title": "📖 Comment ça marche ?",
+      "earnPoints": "Gagnez des points à chaque achat",
+      "reward750": "30 000 points = 750 FCFA de réduction",
+      "reward1000": "40 000 points = 1 000 FCFA de réduction",
+      "welcomeBonus": "2 000 FCFA offerts à l'inscription",
+      "validity": "Les bons sont valables 90 jours"
+    },
+    "errors": {
+      "fetch": "Erreur lors du chargement des données",
+      "retry": "Réessayer",
+      "default": "Impossible de charger vos données de fidélité."
+    },
+    "actions": {
+      "useVoucher": {
+        "title": "Utiliser le bon",
+        "message": "Voulez-vous utiliser le bon de {{value}} FCFA ?\nCode: {{code}}",
+        "confirm": "Utiliser",
+        "cancel": "Annuler",
+        "success": "Bon utilisé avec succès !"
+      },
+      "copyCode": {
+        "title": "Code copié !",
+        "message": "Votre code: {{code}}"
+      }
     }
+  }
 }

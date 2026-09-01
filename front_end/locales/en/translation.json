@@ -11,7 +11,10 @@
     "success": "Success",
     "deactivate": "Deactivate",
     "retry": "Retry",
-    "unavailable": "N/A"
+    "unavailable": "N/A",
+    "copy": "Copy",
+    "use": "Use",
+    "close": "Close"
   },
   "tabHeaders": {
     "home": "Home",
@@ -19,7 +22,8 @@
     "wishlist": "Wishlist",
     "cart": "Cart",
     "profile": "Profile",
-    "settings": "Settings"
+    "settings": "Settings",
+    "loyalty": "Loyalty"
   },
   "homePage": {
     "sections": {
@@ -76,55 +80,115 @@
     "remove": "Remove",
     "updateQuantity": "Update Quantity"
   },
-   "editProfileScreen": {
-        "name": "Full Name",
-        "address": "Address",
-        "phone": "Phone Number",
-        "save": "Save Changes",
-        "nameRequired": "Name is required",
-        "addressInvalid": "Invalid address",
-        "phoneInvalid": "Invalid phone number",
-        "profileUpdated": "Profile updated",
-        "noChanges": "No changes detected"
-    },
-    "changePasswordScreen": {
-        "currentPassword": "Current Password",
-        "newPassword": "New Password",
-        "confirmPassword": "Confirm New Password",
-        "updatePassword": "Update Password",
-        "passwordMismatch": "Passwords do not match",
-        "passwordLength": "Password must be at least 6 characters long",
-        "passwordUpdated": "Password updated",
-        "logout": "You will be logged out for security reasons"
-    },
-      "loginScreen": {
-        "title": "Sign In",
-        "email": "Email Address",
-        "password": "Password",
-        "loginButton": "Sign In",
-        "registerLink": "Don't have an account? Register",
-        "forgotPasswordLink": "Forgot password?"
-    },
-   "WishlistScreen":{
-  "Empty" : "Your wishlist is empty." ,
-   "Tap" : "Tap the ❤️ on products to add them."
+  "editProfileScreen": {
+    "name": "Full Name",
+    "address": "Address",
+    "phone": "Phone Number",
+    "save": "Save Changes",
+    "nameRequired": "Name is required",
+    "addressInvalid": "Invalid address",
+    "phoneInvalid": "Invalid phone number",
+    "profileUpdated": "Profile updated",
+    "noChanges": "No changes detected"
   },
-   "loadingData": "Loading data...",
-    "tagScreen": {
-        "titlePrefix": "Products:",
-        "defaultTitle": "Products by Tag",
-        "missingTag": "Tag name missing.",
-        "fetchError": "Error loading products for tag",
-        "invalidData": "Unexpected product data format.",
-        "fetchGenericError": "Could not load products for this tag.",
-        "noProducts": "No products found for \"{{tag}}\""
+  "changePasswordScreen": {
+    "currentPassword": "Current Password",
+    "newPassword": "New Password",
+    "confirmPassword": "Confirm New Password",
+    "updatePassword": "Update Password",
+    "passwordMismatch": "Passwords do not match",
+    "passwordLength": "Password must be at least 6 characters long",
+    "passwordUpdated": "Password updated",
+    "logout": "You will be logged out for security reasons"
+  },
+  "loginScreen": {
+    "title": "Sign In",
+    "email": "Email Address",
+    "password": "Password",
+    "loginButton": "Sign In",
+    "registerLink": "Don't have an account? Register",
+    "forgotPasswordLink": "Forgot password?"
+  },
+  "WishlistScreen": {
+    "Empty": "Your wishlist is empty.",
+    "Tap": "Tap the ❤️ on products to add them."
+  },
+  "loadingData": "Loading data...",
+  "tagScreen": {
+    "titlePrefix": "Products:",
+    "defaultTitle": "Products by Tag",
+    "missingTag": "Tag name missing.",
+    "fetchError": "Error loading products for tag",
+    "invalidData": "Unexpected product data format.",
+    "fetchGenericError": "Could not load products for this tag.",
+    "noProducts": "No products found for \"{{tag}}\""
+  },
+  "categoryScreen": {
+    "defaultTitle": "Category {{categoryId}}",
+    "missingCategoryId": "Missing category ID.",
+    "fetchError": "Error loading products for category",
+    "invalidData": "Unexpected product data format.",
+    "fetchGenericError": "Could not load products for this category.",
+    "noProducts": "No products found in this category."
+  },
+
+  "loyaltyScreen": {
+    "title": "Loyalty & Rewards",
+    "loading": "Loading your rewards...",
+    "notConnected": {
+      "title": "Sign in to see your rewards",
+      "subtitle": "Earn points, unlock vouchers and enjoy exclusive benefits",
+      "login": "Sign in",
+      "register": "Create an account"
     },
-       "categoryScreen": {
-        "defaultTitle": "Category {{categoryId}}",
-        "missingCategoryId": "Missing category ID.",
-        "fetchError": "Error loading products for category",
-        "invalidData": "Unexpected product data format.",
-        "fetchGenericError": "Could not load products for this category.",
-        "noProducts": "No products found in this category."
+    "welcomeBonus": {
+      "title": "🎉 Welcome Bonus!",
+      "description": "Enjoy your {{value}} FCFA shopping voucher offered at registration!",
+      "expiry": "⏰ Valid for 30 days"
+    },
+    "points": {
+      "label": "Loyalty Points",
+      "totalSpent": "Total Spent",
+      "nextReward": "Next Reward",
+      "remaining": "{{points}} points remaining",
+      "progress": "{{current}} / {{total}} points"
+    },
+    "vouchers": {
+      "available": "🎁 Available Vouchers ({{count}})",
+      "empty": "No vouchers available",
+      "emptySubtext": "Keep shopping to unlock rewards!",
+      "code": "Code: {{code}}",
+      "expires": "⏰ Expires on: {{date}}",
+      "copy": "Copy",
+      "use": "Use",
+      "used": "✅ Used Vouchers ({{count}})",
+      "usedLabel": "Used on: {{date}}"
+    },
+    "rules": {
+      "title": "📖 How it works?",
+      "earnPoints": "Earn points with every purchase",
+      "reward750": "30,000 points = 750 FCFA discount",
+      "reward1000": "40,000 points = 1,000 FCFA discount",
+      "welcomeBonus": "2,000 FCFA welcome bonus",
+      "validity": "Vouchers are valid for 90 days"
+    },
+    "errors": {
+      "fetch": "Error loading data",
+      "retry": "Retry",
+      "default": "Unable to load your loyalty data."
+    },
+    "actions": {
+      "useVoucher": {
+        "title": "Use Voucher",
+        "message": "Do you want to use the {{value}} FCFA voucher?\nCode: {{code}}",
+        "confirm": "Use",
+        "cancel": "Cancel",
+        "success": "Voucher used successfully!"
+      },
+      "copyCode": {
+        "title": "Code copied!",
+        "message": "Your code: {{code}}"
+      }
     }
+  }
 }
