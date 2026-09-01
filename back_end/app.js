@@ -18,7 +18,6 @@ const loyaltyRoutes = require('./routes/loyaltyRoutes');
 const livraisonRoutes = require('./routes/livraisonRoutes');
 const avisRouter = require('./routes/avis');
 const campaignRoutes = require('./routes/campaignRoutes');
-
 const app = express();
 
 app.use(cors());
@@ -46,12 +45,11 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/promo', promoRoutes);
 app.use('/api/fidelite', loyaltyRoutes);
 app.use('/api/livraison', livraisonRoutes);
-app.use('/api/campaigns', campaignRoutes); // <-- Correctement placé ici
+app.use('/api/campaigns', campaignRoutes);
+app.use('/api', loyaltyRoutes);
 
-// Monter le router des avis à la racine /api
 app.use('/api', avisRouter);
 
-// Middleware de gestion des erreurs
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Quelque chose s\'est mal passé !' });
