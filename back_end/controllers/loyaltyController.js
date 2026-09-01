@@ -1,4 +1,4 @@
-// ARTIVA/back_end/controllers/loyaltyController.js
+// back_end/controllers/loyaltyController.js
 //
 // Programme de fidélité.
 //
@@ -69,6 +69,222 @@ function genererCode() {
 }
 
 /**
+ * Crée un bon de bienvenue de 2000 FCFA pour un nouvel utilisateur
+ */
+/**
+ * Crée un bon de bienvenue de 2000 FCFA pour un nouvel utilisateur
+ * (offert à tous les nouveaux utilisateurs, qu'ils aient commandé ou non)
+ */
+async function creerBonusBienvenue(client, userId) {
+  const currentClient = client || db;
+  
+  // Vérifier si l'utilisateur a déjà un bonus de bienvenue
+  const { rows: existing } = await currentClient.query(
+    `SELECT id, code FROM promo_codes 
+     WHERE user_id = $1 AND code LIKE 'BIENVENUE%'`,
+    [userId]
+  );
+  
+  if (existing.length > 0) {
+    console.log(`ℹ️ Bonus de bienvenue déjà existant pour l'utilisateur ${userId}: ${existing[0].code}`);
+    return existing[0];
+  }
+  
+  // 🔥 SUPPRIME LA VÉRIFICATION DES COMMANDES
+  // Tout nouveau utilisateur a droit au bonus de bienvenue
+  
+  // Générer un code unique
+  const code = `BIENVENUE${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 120); // 120 jours de validité
+  
+  const { rows } = await currentClient.query(
+    `INSERT INTO promo_codes 
+     (code, description, discount_type, discount_value, min_purchase_amount,
+      expires_at, max_uses, max_uses_per_user, is_active, user_id, is_loyalty_reward)
+     VALUES ($1, $2, 'fixed', $3, 0, $4, 1, 1, TRUE, $5, FALSE)
+     RETURNING *`,
+    [code, 'Bonus de bienvenue - 2000 FCFA', 2000, expiresAt, userId]
+  );
+  
+  console.log(`🎁 Bonus de bienvenue créé pour l'utilisateur ${userId}: ${code} (valable 120 jours)`);
+  
+  // Envoyer une notification
+  await currentClient.query(
+    `INSERT INTO notifications (user_id, type, title, message, link_url)
+     VALUES ($1, 'promotion', $2, $3, $4)`,
+    [
+      userId,
+      '🎉 Bienvenue sur ARTIVA !',
+      `Profitez de votre bon de bienvenue de 2000 FCFA avec le code ${code}. Valable 120 jours.`,
+      '/fidelite'
+    ]
+  );
+  
+  return rows[0];
+}
+
+/**
+ * Génère un bon cumulé quand le seuil de points est atteint
+ */
+async function genererBonCumule(client, userId, pointsUtilises, divisor, reglages) {
+  const currentClient = client || db;
+  
+  const valeurBon = Math.floor(pointsUtilises / divisor);
+  const expiration = new Date();
+  expiration.setDate(expiration.getDate() + reglages.validity_days);
+  
+  let bon = null;
+  for (let essai = 0; essai < 5 && !bon; essai++) {
+    try {
+      const { rows } = await currentClient.query(
+        `INSERT INTO promo_codes
+           (code, description, discount_type, discount_value, min_purchase_amount,
+            expires_at, max_uses, max_uses_per_user, is_active, user_id, is_loyalty_reward)
+         VALUES ($1, $2, 'fixed', $3, 0, $4, 1, 1, TRUE, $5, TRUE)
+         RETURNING *`,
+        [
+          genererCode(),
+          `Bon de fidélité — ${pointsUtilises.toLocaleString('fr-FR')} points convertis`,
+          valeurBon,
+          expiration,
+          userId,
+        ]
+      );
+      bon = rows[0];
+    } catch (error) {
+      if (error.code !== '23505') throw error;
+    }
+  }
+  
+  if (!bon) throw new Error("Impossible de générer un code de fidélité unique.");
+  
+  // Notification
+  const dateLisible = expiration.toLocaleDateString('fr-FR', {
+    day: 'numeric', month: 'long', year: 'numeric',
+  });
+  await currentClient.query(
+    `INSERT INTO notifications (user_id, type, title, message, link_url)
+     VALUES ($1, 'promotion', $2, $3, $4)`,
+    [
+      userId,
+      `🎁 Vous avez gagné un bon de ${valeurBon.toLocaleString('fr-FR')} FCFA`,
+      `Vos ${pointsUtilises.toLocaleString('fr-FR')} points de fidélité vous donnent un bon de ` +
+        `${valeurBon.toLocaleString('fr-FR')} FCFA. Utilisez le code ${bon.code} lors de votre ` +
+        `prochaine commande, valable jusqu'au ${dateLisible}.`,
+      '/fidelite',
+    ]
+  );
+  
+  return bon;
+}
+
+/**
+ * Cumule les points d'un utilisateur et génère un seul bon global
+ */
+async function cumulerEtGenererBon(client, userId, reglages) {
+  const currentClient = client || db;
+  
+  // Récupérer le solde actuel
+  const { rows: user } = await currentClient.query(
+    'SELECT loyalty_points, total_spent FROM users WHERE id = $1',
+    [userId]
+  );
+  
+  if (user.length === 0) return null;
+  
+  const solde = user[0].loyalty_points;
+  const totalSpent = parseFloat(user[0].total_spent || 0);
+  
+  // Si le solde est inférieur au seuil, rien à faire
+  if (solde < reglages.threshold_points) {
+    return null;
+  }
+  
+  // Calculer combien de bons sont cumulés
+  const nombreBons = Math.floor(solde / reglages.threshold_points);
+  const pointsUtilises = nombreBons * reglages.threshold_points;
+  const pointsRestants = solde - pointsUtilises;
+  
+  // Déterminer le diviseur actuel
+  const divisor = getDivisor(totalSpent);
+  
+  // Calculer la valeur totale cumulée
+  const valeurTotale = Math.floor(pointsUtilises / divisor);
+  
+  console.log(`📊 Cumul : ${pointsUtilises} points → ${valeurTotale} FCFA (diviseur: ${divisor})`);
+  console.log(`📊 ${nombreBons} paliers cumulés en un seul bon de ${valeurTotale} FCFA`);
+  
+  // Générer UN SEUL bon
+  const expiration = new Date();
+  expiration.setDate(expiration.getDate() + reglages.validity_days);
+  
+  let bon = null;
+  for (let essai = 0; essai < 5 && !bon; essai++) {
+    try {
+      const { rows } = await currentClient.query(
+        `INSERT INTO promo_codes
+           (code, description, discount_type, discount_value, min_purchase_amount,
+            expires_at, max_uses, max_uses_per_user, is_active, user_id, is_loyalty_reward)
+         VALUES ($1, $2, 'fixed', $3, 0, $4, 1, 1, TRUE, $5, TRUE)
+         RETURNING *`,
+        [
+          genererCode(),
+          `Bon de fidélité cumulé — ${pointsUtilises.toLocaleString('fr-FR')} points convertis`,
+          valeurTotale,
+          expiration,
+          userId,
+        ]
+      );
+      bon = rows[0];
+    } catch (error) {
+      if (error.code !== '23505') throw error;
+    }
+  }
+  
+  if (!bon) throw new Error("Impossible de générer un code de fidélité unique.");
+  
+  // Mettre à jour le solde (enlever les points utilisés)
+  await currentClient.query(
+    'UPDATE users SET loyalty_points = $1 WHERE id = $2',
+    [pointsRestants, userId]
+  );
+  
+  // Enregistrer dans le ledger
+  await currentClient.query(
+    `INSERT INTO loyalty_ledger (user_id, delta, reason, promo_code_id, balance_after)
+     VALUES ($1, $2, 'converted', $3, $4)`,
+    [userId, -pointsUtilises, bon.id, pointsRestants]
+  );
+  
+  // Notification
+  const dateLisible = expiration.toLocaleDateString('fr-FR', {
+    day: 'numeric', month: 'long', year: 'numeric',
+  });
+  await currentClient.query(
+    `INSERT INTO notifications (user_id, type, title, message, link_url)
+     VALUES ($1, 'promotion', $2, $3, $4)`,
+    [
+      userId,
+      `🎁 Vous avez gagné un bon cumulé de ${valeurTotale.toLocaleString('fr-FR')} FCFA`,
+      `Félicitations ! Vous avez cumulé ${pointsUtilises.toLocaleString('fr-FR')} points de fidélité, ` +
+        `ce qui vous donne un bon d'achat de ${valeurTotale.toLocaleString('fr-FR')} FCFA. ` +
+        `Code : ${bon.code}. Valable jusqu'au ${dateLisible}.`,
+      '/fidelite',
+    ]
+  );
+  
+  console.log(`🎁 Bon cumulé généré: ${bon.code} (${valeurTotale} FCFA)`);
+  console.log(`📊 Nouveau solde: ${pointsRestants} points`);
+  
+  return {
+    bon: { code: bon.code, valeur: valeurTotale, expire_le: bon.expires_at },
+    pointsRestants,
+    pointsUtilises,
+  };
+}
+
+/**
  * Crédite les points et génère un bon cumulé si le seuil est atteint
  */
 async function crediterPoints(client, userId, orderId, montantProduits) {
@@ -93,11 +309,9 @@ async function crediterPoints(client, userId, orderId, montantProduits) {
   const currentTotalSpent = parseFloat(utilisateurs[0].total_spent || 0);
   const nouveauTotalSpent = currentTotalSpent + montantProduits;
   
-  // 🔥 Déterminer le diviseur selon le NOUVEAU total
   const divisor = getDivisor(nouveauTotalSpent);
   console.log(`📊 Diviseur pour ${nouveauTotalSpent} FCFA: ${divisor}`);
   
-  // 🔥 Calculer les points : montant / diviseur
   const points = Math.floor(montantProduits / divisor);
   console.log(`📊 points calculés (${montantProduits}/${divisor}): ${points}`);
   
@@ -120,89 +334,17 @@ async function crediterPoints(client, userId, orderId, montantProduits) {
   
   console.log(`✅ Points crédités: +${points}, nouveau solde: ${soldeApres}`);
 
-  // Si le seuil est atteint (30 000 points)
+  // Cumuler et générer UN SEUL bon si le seuil est atteint
+  let bonCumule = null;
   if (soldeApres >= reglages.threshold_points) {
-    const nombreBons = Math.floor(soldeApres / reglages.threshold_points);
-    const pointsUtilises = nombreBons * reglages.threshold_points;
-    const pointsRestants = soldeApres - pointsUtilises;
-    
-    // 🔥 Valeur du bon = points utilisés / diviseur actuel
-    const valeurBon = Math.floor(pointsUtilises / divisor);
-    console.log(`📊 ${nombreBons} bon(s) cumulés, valeur: ${valeurBon} FCFA (diviseur: ${divisor})`);
-    
-    const expiration = new Date();
-    expiration.setDate(expiration.getDate() + reglages.validity_days);
-
-    // 🔥 Générer UN SEUL bon cumulé
-    let bon = null;
-    for (let essai = 0; essai < 5 && !bon; essai++) {
-      try {
-        const { rows } = await client.query(
-          `INSERT INTO promo_codes
-             (code, description, discount_type, discount_value, min_purchase_amount,
-              expires_at, max_uses, max_uses_per_user, is_active, user_id, is_loyalty_reward)
-           VALUES ($1, $2, 'fixed', $3, 0, $4, 1, 1, TRUE, $5, TRUE)
-           RETURNING *`,
-          [
-            genererCode(),
-            `Bon de fidélité — ${pointsUtilises.toLocaleString('fr-FR')} points convertis`,
-            valeurBon,
-            expiration,
-            userId,
-          ]
-        );
-        bon = rows[0];
-      } catch (error) {
-        if (error.code !== '23505') throw error;
-      }
-    }
-    if (!bon) throw new Error("Impossible de générer un code de fidélité unique.");
-
-    // Mettre à jour le solde
-    await client.query(
-      'UPDATE users SET loyalty_points = $1 WHERE id = $2',
-      [pointsRestants, userId]
-    );
-    
-    await client.query(
-      `INSERT INTO loyalty_ledger (user_id, delta, reason, order_id, promo_code_id, balance_after)
-       VALUES ($1, $2, 'converted', $3, $4, $5)`,
-      [userId, -pointsUtilises, orderId, bon.id, pointsRestants]
-    );
-    
-    console.log(`🎁 Bon généré: ${bon.code} (${valeurBon} FCFA)`);
-    console.log(`📊 Nouveau solde: ${pointsRestants} points`);
-
-    // Notification
-    const dateLisible = expiration.toLocaleDateString('fr-FR', {
-      day: 'numeric', month: 'long', year: 'numeric',
-    });
-    await client.query(
-      `INSERT INTO notifications (user_id, type, title, message, link_url)
-       VALUES ($1, 'promotion', $2, $3, $4)`,
-      [
-        userId,
-        `🎁 Vous avez gagné un bon de ${valeurBon.toLocaleString('fr-FR')} FCFA`,
-        `Vos ${pointsUtilises.toLocaleString('fr-FR')} points de fidélité vous donnent un bon de ` +
-          `${valeurBon.toLocaleString('fr-FR')} FCFA. Utilisez le code ${bon.code} lors de votre ` +
-          `prochaine commande, valable jusqu'au ${dateLisible}.`,
-        '/fidelite',
-      ]
-    );
-
-    return {
-      points,
-      solde: pointsRestants,
-      restant: Math.max(0, reglages.threshold_points - pointsRestants),
-      bon: { code: bon.code, valeur: valeurBon, expire_le: expiration, points_convertis: pointsUtilises },
-    };
+    bonCumule = await cumulerEtGenererBon(client, userId, reglages);
   }
 
   return {
     points,
-    solde: soldeApres,
-    restant: reglages.threshold_points - soldeApres,
-    bon: null,
+    solde: bonCumule ? bonCumule.pointsRestants : soldeApres,
+    restant: Math.max(0, reglages.threshold_points - (bonCumule ? bonCumule.pointsRestants : soldeApres)),
+    bon: bonCumule ? bonCumule.bon : null,
   };
 }
 
@@ -289,11 +431,9 @@ async function initialiserPointsUtilisateur(client, userId) {
     return false;
   }
   
-  // 🔥 Déterminer le diviseur selon le total
   const divisor = getDivisor(totalSpent);
   console.log(`📊 Diviseur pour ${totalSpent} FCFA: ${divisor}`);
   
-  // 🔥 Calculer les points : total / diviseur
   const points = Math.floor(totalSpent / divisor);
   console.log(`📊 Points calculés (${totalSpent}/${divisor}): ${points}`);
   
@@ -354,26 +494,44 @@ exports.monStatut = async (req, res) => {
     const solde = u[0].loyalty_points;
     const totalSpent = parseFloat(u[0].total_spent || 0);
 
-    const { rows: bons } = await db.query(
-      `SELECT p.id, p.code, p.discount_value AS valeur, p.expires_at,
-              EXISTS (SELECT 1 FROM promo_code_usages pu WHERE pu.promo_code_id = p.id) AS utilise
-         FROM promo_codes p
-        WHERE p.user_id = $1 AND p.is_loyalty_reward = TRUE
-        ORDER BY p.created_at DESC`,
+    // CRÉER LE BONUS DE BIENVENUE SI L'UTILISATEUR N'A PAS ENCORE COMMANDÉ
+    await creerBonusBienvenue(null, userId);
+
+    // RÉCUPÉRER TOUS LES BONS (fidélité + bienvenue)
+    const { rows: tousLesBons } = await db.query(
+      `SELECT 
+        p.id, 
+        p.code, 
+        p.discount_value AS valeur, 
+        p.expires_at,
+        p.is_loyalty_reward,
+        p.description,
+        EXISTS (SELECT 1 FROM promo_code_usages pu WHERE pu.promo_code_id = p.id) AS utilise
+       FROM promo_codes p
+      WHERE p.user_id = $1
+        AND (p.is_loyalty_reward = TRUE OR p.code LIKE 'BIENVENUE%')
+      ORDER BY 
+        p.code LIKE 'BIENVENUE%' DESC,
+        p.created_at DESC`,
       [userId]
     );
 
     const maintenant = new Date();
-    const bonsFormates = bons.map((b) => ({
-      code: b.code,
-      valeur: parseFloat(b.valeur),
-      expire_le: b.expires_at,
-      etat: b.utilise
-        ? 'utilise'
-        : new Date(b.expires_at) < maintenant
-        ? 'expire'
-        : 'disponible',
-    }));
+    const bonsFormates = tousLesBons.map((b) => {
+      const estBienvenue = b.code?.startsWith('BIENVENUE') || false;
+      return {
+        code: b.code,
+        valeur: parseFloat(b.valeur),
+        expire_le: b.expires_at,
+        type: estBienvenue ? 'bienvenue' : 'fidelite',
+        description: b.description || (estBienvenue ? 'Bonus de bienvenue - 2000 FCFA' : 'Bon de fidélité'),
+        etat: b.utilise
+          ? 'utilise'
+          : new Date(b.expires_at) < maintenant
+          ? 'expire'
+          : 'disponible',
+      };
+    });
 
     const { rows: historique } = await db.query(
       `SELECT delta, reason, balance_after, created_at, order_id
@@ -381,37 +539,6 @@ exports.monStatut = async (req, res) => {
         ORDER BY created_at DESC LIMIT 20`,
       [userId]
     );
-
-    // 🔥 BONUS DE BIENVENUE - 2 000 FCFA - 120 JOURS
-    const { rows: welcomeCheck } = await db.query(
-      `SELECT id FROM promo_codes 
-       WHERE user_id = $1 AND code LIKE 'BIENVENUE%'`,
-      [userId]
-    );
-    const hasWelcomeBonus = welcomeCheck.length > 0;
-
-    if (!hasWelcomeBonus) {
-      const { rows: ordersCount } = await db.query(
-        'SELECT COUNT(*)::int as count FROM orders WHERE user_id = $1',
-        [userId]
-      );
-      
-      if (ordersCount[0].count === 0) {
-        const code = `BIENVENUE${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
-        const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + 120); // 120 jours
-        
-        await db.query(
-          `INSERT INTO promo_codes 
-           (code, description, discount_type, discount_value, min_purchase_amount,
-            expires_at, max_uses, max_uses_per_user, is_active, user_id, is_loyalty_reward)
-           VALUES ($1, $2, 'fixed', $3, 0, $4, 1, 1, TRUE, $5, FALSE)`,
-          [code, 'Bonus de bienvenue - 2000 FCFA', 2000, expiresAt, userId]
-        );
-        
-        console.log(`🎁 Bonus de bienvenue créé pour l'utilisateur ${userId}: ${code} (valable 120 jours)`);
-      }
-    }
 
     return res.status(200).json({
       actif: reglages.is_active,
@@ -531,8 +658,15 @@ exports.listerClients = async (req, res) => {
   }
 };
 
+// =============================================================================
+// EXPORTS
+// =============================================================================
+
 exports.crediterPoints = crediterPoints;
 exports.reprendrePoints = reprendrePoints;
 exports.calculerValeurBon = calculerValeurBon;
 exports.lireReglages = lireReglages;
 exports.STATUTS_EXCLUS = STATUTS_EXCLUS;
+exports.creerBonusBienvenue = creerBonusBienvenue;
+exports.genererBonCumule = genererBonCumule;
+exports.cumulerEtGenererBon = cumulerEtGenererBon;
