@@ -7,7 +7,6 @@ import {
   ScrollView,
   Pressable,
   Linking,
-  Image,
   Alert,
 } from 'react-native';
 import { Stack } from 'expo-router';
@@ -21,40 +20,45 @@ const SOCIAL_LINKS = [
     name: 'Facebook',
     icon: 'facebook',
     color: '#1877F2',
-    url: 'https://facebook.com/artiva',
-    username: '@artiva',
-  },
-  {
-    id: 'instagram',
-    name: 'Instagram',
-    icon: 'instagram',
-    color: '#E4405F',
-    url: 'https://instagram.com/artiva',
-    username: '@artiva',
+    url: 'https://www.facebook.com/share/14bEWEWAoS8/',
+    username: '@Artiva',
+    disponible: true,
   },
   {
     id: 'tiktok',
     name: 'TikTok',
     icon: 'tiktok',
     color: '#000000',
-    url: 'https://tiktok.com/@artiva',
+    url: 'https://www.tiktok.com/@artiva548?_r=1&_t=ZS-99Q6oAAyaIS',
+    username: '@artiva548',
+    disponible: true,
+  },
+  {
+    id: 'instagram',
+    name: 'Instagram',
+    icon: 'instagram',
+    color: '#E4405F',
+    url: '',
     username: '@artiva',
+    disponible: false,
   },
   {
     id: 'youtube',
     name: 'YouTube',
     icon: 'youtube',
     color: '#FF0000',
-    url: 'https://youtube.com/@artiva',
+    url: '',
     username: 'Artiva',
+    disponible: false,
   },
   {
     id: 'whatsapp',
     name: 'WhatsApp',
     icon: 'whatsapp',
     color: '#25D366',
-    url: 'https://wa.me/22890000000',
+    url: '',
     username: '+228 90 000 000',
+    disponible: false,
   },
 ];
 
@@ -63,9 +67,23 @@ export default function SocialLinksScreen() {
   const currentScheme = effectiveAppColorScheme ?? 'light';
   const colors = Colors[currentScheme];
 
-  const openLink = (url: string) => {
+  const openLink = (url: string, disponible: boolean) => {
+    if (!disponible) {
+      Alert.alert(
+        '🔜 Bientôt disponible',
+        'Cette page sera disponible prochainement. Suivez-nous sur nos autres réseaux !'
+      );
+      return;
+    }
+    if (!url) {
+      Alert.alert(
+        '🔜 Bientôt disponible',
+        'Cette page sera disponible prochainement. Suivez-nous sur nos autres réseaux !'
+      );
+      return;
+    }
     Linking.openURL(url).catch(() => {
-      Alert.alert('Erreur', 'Impossible d\'ouvrir le lien');
+      Alert.alert('Erreur', "Impossible d'ouvrir le lien");
     });
   };
 
@@ -98,8 +116,14 @@ export default function SocialLinksScreen() {
       {SOCIAL_LINKS.map((social) => (
         <Pressable
           key={social.id}
-          style={[styles.socialCard, { backgroundColor: colors.card }]}
-          onPress={() => openLink(social.url)}
+          style={[
+            styles.socialCard,
+            {
+              backgroundColor: colors.card,
+              opacity: social.disponible ? 1 : 0.6,
+            }
+          ]}
+          onPress={() => openLink(social.url, social.disponible)}
         >
           <View style={[styles.iconContainer, { backgroundColor: social.color + '15' }]}>
             <FontAwesome5 name={social.icon} size={28} color={social.color} />
@@ -112,7 +136,15 @@ export default function SocialLinksScreen() {
               {social.username}
             </Text>
           </View>
-          <MaterialIcons name="chevron-right" size={24} color={colors.subtleText} />
+          {social.disponible ? (
+            <MaterialIcons name="chevron-right" size={24} color={colors.subtleText} />
+          ) : (
+            <View style={[styles.bientotBadge, { backgroundColor: colors.tint + '20' }]}>
+              <Text style={[styles.bientotBadgeText, { color: colors.tint }]}>
+                🔜 Bientôt
+              </Text>
+            </View>
+          )}
         </Pressable>
       ))}
     </ScrollView>
@@ -170,5 +202,14 @@ const styles = StyleSheet.create({
   socialUsername: {
     fontSize: 14,
     marginTop: 2,
+  },
+  bientotBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  bientotBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

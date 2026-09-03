@@ -55,7 +55,7 @@ export default function ShoppingGuideScreen() {
     >
       <Stack.Screen
         options={{
-          title: 'Guide d\'achat',
+          title: "Guide d'achat",
           headerShown: true,
           headerStyle: { backgroundColor: colors.card },
           headerTitleStyle: { color: colors.text, fontSize: 18, fontWeight: '600' },
@@ -97,6 +97,48 @@ export default function ShoppingGuideScreen() {
           </View>
         </View>
       ))}
+
+      {/* 🔥 SECTION PAIEMENT ET LIVRAISON */}
+      <View style={[styles.infoCard, { backgroundColor: colors.card }]}>
+        <Text style={[styles.infoTitle, { color: colors.text }]}>
+          💳 Paiement & Livraison
+        </Text>
+        
+        <View style={styles.infoItem}>
+          <View style={[styles.infoIcon, { backgroundColor: colors.tint + '15' }]}>
+            <FontAwesome5 name="hand-holding-usd" size={20} color={colors.tint} />
+          </View>
+          <View style={styles.infoTextContainer}>
+            <Text style={[styles.infoText, { color: colors.subtleText }]}>
+              <Text style={{ fontWeight: 'bold', color: colors.text }}>Moins de 30 000 FCFA :</Text>
+              {'\n'}Paiement à la livraison
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.infoItem}>
+          <View style={[styles.infoIcon, { backgroundColor: colors.tint + '15' }]}>
+            <FontAwesome5 name="credit-card" size={20} color={colors.tint} />
+          </View>
+          <View style={styles.infoTextContainer}>
+            <Text style={[styles.infoText, { color: colors.subtleText }]}>
+              <Text style={{ fontWeight: 'bold', color: colors.text }}>Plus de 30 000 FCFA :</Text>
+              {'\n'}Paiement par transfert (Mobile Money, carte bancaire, virement, etc.)
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.infoItem}>
+          <View style={[styles.infoIcon, { backgroundColor: colors.tint + '15' }]}>
+            <MaterialIcons name="info-outline" size={20} color={colors.tint} />
+          </View>
+          <View style={styles.infoTextContainer}>
+            <Text style={[styles.infoText, { color: colors.subtleText }]}>
+              Vous pouvez choisir le moyen de paiement qui vous convient le mieux.
+            </Text>
+          </View>
+        </View>
+      </View>
 
       <View style={[styles.tipsCard, { backgroundColor: colors.card }]}>
         <Text style={[styles.tipsTitle, { color: colors.text }]}>
@@ -198,6 +240,36 @@ const styles = StyleSheet.create({
     height: 150,
     borderRadius: 8,
     backgroundColor: '#f0f0f0',
+  },
+  infoCard: {
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  infoTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  infoItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 12,
+  },
+  infoIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  infoTextContainer: {
+    flex: 1,
+  },
+  infoText: {
+    fontSize: 14,
+    lineHeight: 20,
   },
   tipsCard: {
     padding: 16,
