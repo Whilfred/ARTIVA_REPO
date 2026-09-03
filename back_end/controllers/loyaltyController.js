@@ -1,18 +1,3 @@
-// back_end/controllers/loyaltyController.js
-//
-// Programme de fidélité.
-//
-// Le client accumule des points à chaque achat selon le diviseur en fonction du total dépensé.
-// Dès que son solde atteint 30000 points, un bon nominatif lui est attribué automatiquement
-// et son solde repart de zéro.
-//
-// Diviseurs :
-// - 0 - 99 999 FCFA : 40
-// - 100 000 - 199 999 FCFA : 50
-// - 200 000 - 299 999 FCFA : 55
-// - 300 000 - 999 999 FCFA : 60
-// - 1 000 000+ FCFA : 70
-
 const db = require('../config/db');
 
 const REGLAGES_DEFAUT = {
