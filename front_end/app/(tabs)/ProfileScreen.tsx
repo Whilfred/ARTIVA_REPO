@@ -22,6 +22,9 @@ import {
   User,
   Star,
   ChevronRight,
+  Share2,
+  Shield,
+  BookOpen,
 } from "lucide-react-native";
 import { useRouter, Href, Stack, useFocusEffect } from "expo-router";
 import { useAuth } from "../../context/AuthContext";
@@ -89,6 +92,27 @@ const menuItemsBaseConfig: {
     subtitleBase: "Vos points et bons de réduction",
     route: "/(tabs)/LoyaltyScreen" as Href,
   },
+{
+  id: "social",
+  icon: Share2,
+  title: "Nos réseaux sociaux",
+  subtitleBase: "Suivez-nous sur les réseaux",
+  route: "/(tabs)/SocialLinksScreen" as Href,
+},
+{
+  id: "privacy",
+  icon: Shield,
+  title: "Politique de confidentialité",
+  subtitleBase: "Comment nous protégeons vos données",
+  route: "/(tabs)/PrivacyPolicyScreen" as Href,
+},
+{
+  id: "guide",
+  icon: BookOpen,
+  title: "Guide d'achat",
+  subtitleBase: "Comment commander sur Artiva",
+  route: "/(tabs)/ShoppingGuideScreen" as Href,
+},
   {
     id: "notifications",
     icon: Bell,
