@@ -130,12 +130,39 @@ export default function TabLayout() {
         }}
       />
 
-      {/* 👇 LoyaltyScreen - UNIQUEMENT accessible depuis le profil (CACHÉ dans la barre de navigation) */}
+      {/* 👇 LoyaltyScreen - UNIQUEMENT accessible depuis le profil */}
       <Tabs.Screen
         name="LoyaltyScreen"
         options={{
           href: null,
           title: t('tabHeaders.loyalty', 'Fidélité'),
+        }}
+      />
+
+      {/* 👇 SocialLinksScreen - UNIQUEMENT accessible depuis le profil */}
+      <Tabs.Screen
+        name="SocialLinksScreen"
+        options={{
+          href: null,
+          title: 'Nos réseaux sociaux',
+        }}
+      />
+
+      {/* 👇 PrivacyPolicyScreen - UNIQUEMENT accessible depuis le profil */}
+      <Tabs.Screen
+        name="PrivacyPolicyScreen"
+        options={{
+          href: null,
+          title: 'Politique de confidentialité',
+        }}
+      />
+
+      {/* 👇 ShoppingGuideScreen - UNIQUEMENT accessible depuis le profil */}
+      <Tabs.Screen
+        name="ShoppingGuideScreen"
+        options={{
+          href: null,
+          title: "Guide d'achat",
         }}
       />
     </Tabs>

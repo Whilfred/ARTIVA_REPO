@@ -805,8 +805,7 @@ if (isLoading) {
                 <Ionicons name="cube-outline" size={26} color={colors.tint} />
             </View>
             <Text style={{ color: colors.text, fontSize: 14, flex: 1, lineHeight: 20 }}>
-                Livraison gratuite sur des centaines d'articles dans les villes ci-dessous, commande minimum 10 000 FCFA
-            </Text>
+🎁 Offre spéciale : Dépensez 100 000 FCFA en 7 jours et bénéficiez d'une livraison gratuite jusqu'à 5 000 FCFA sur votre prochaine commande            </Text>
           </View>
 
         </View>
