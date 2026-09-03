@@ -1,8 +1,8 @@
 // front_end/app/(tabs)/_layout.tsx
 
-import React, { useEffect } from 'react'; // ← AJOUTER useEffect
+import React, { useEffect } from 'react';
 import { Tabs } from 'expo-router';
-import { useRouter } from 'expo-router'; // ← AJOUTER
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,7 +17,7 @@ export default function TabLayout() {
   const { userToken, isLoading: isAuthLoading, unreadNotificationCount } = useAuth();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const router = useRouter(); // ← AJOUTER
+  const router = useRouter();
 
   // 🔥 PROTECTION : Redirige vers login si non connecté
   useEffect(() => {
@@ -127,6 +127,15 @@ export default function TabLayout() {
             backgroundColor: '#EF4444',
             color: 'white',
           },
+        }}
+      />
+
+      {/* 👇 LoyaltyScreen - UNIQUEMENT accessible depuis le profil (CACHÉ dans la barre de navigation) */}
+      <Tabs.Screen
+        name="LoyaltyScreen"
+        options={{
+          href: null,
+          title: t('tabHeaders.loyalty', 'Fidélité'),
         }}
       />
     </Tabs>
