@@ -1,25 +1,3 @@
-// back_end/utils/sendEmail.js
-//
-// Gestion des emails Artiva.
-//
-// Modes disponibles via MAIL_TRANSPORT dans .env :
-//
-//   mailpit  -> DÉVELOPPEMENT
-//                Les emails sont capturés par Mailpit.
-//                Interface : http://localhost:8025
-//
-//   console  -> DÉVELOPPEMENT
-//                Aucun email n'est envoyé.
-//                Le contenu est affiché dans le terminal.
-//
-//   brevo    -> PRODUCTION
-//                Envoi réel via l'API HTTPS Brevo.
-//
-// IMPORTANT :
-// Le mode Brevo n'utilise PAS SMTP et ne nécessite donc plus Nodemailer.
-// Il utilise directement l'API HTTP de Brevo.
-// =============================================================================
-
 // =============================================================================
 // Configuration Brevo API
 // =============================================================================
@@ -298,7 +276,7 @@ const sendMailWithLog = async (mailOptions, label) => {
 };
 
 // =============================================================================
-// Petit gabarit HTML commun, pour ne pas répéter la même carte 8 fois
+// Gabarit HTML commun
 // =============================================================================
 
 const carteEmail = ({ titre, couleur, corps, pied }) => `
@@ -318,6 +296,139 @@ const carteEmail = ({ titre, couleur, corps, pied }) => `
     </p>
   </div>
 `;
+
+// =============================================================================
+// EMAIL 1 : Bienvenue
+// =============================================================================
+
+const sendWelcomeEmail = async (to, name) => {
+  const htmlContent = carteEmail({
+    titre: "🎉 Bienvenue sur Artiva !",
+    couleur: "#4CAF50",
+    corps: `
+      <p style="font-size:16px;">
+        Bonjour ${name || "Cher client"},
+      </p>
+      <p style="font-size:15px;">
+        Nous sommes ravis de vous accueillir dans la communauté Artiva ! 🎊
+      </p>
+      <p style="font-size:15px;">
+        Vous pouvez dès maintenant :
+      </p>
+      <ul style="font-size:15px; list-style:none; padding-left:0;">
+        <li style="padding:8px 0;">🛍️ <b>Parcourir notre catalogue</b> de produits artisanaux</li>
+        <li style="padding:8px 0;">❤️ <b>Ajouter vos articles préférés</b> à votre liste de souhaits</li>
+        <li style="padding:8px 0;">📦 <b>Passer votre première commande</b></li>
+      </ul>
+      <div style="text-align:center; margin:20px 0;">
+        <a href="https://artiva.app/catalog" style="
+          background:#4CAF50;
+          color:white;
+          padding:12px 30px;
+          text-decoration:none;
+          border-radius:5px;
+          font-weight:bold;
+          display:inline-block;
+        ">
+          🛒 Découvrir les produits
+        </a>
+      </div>
+      <p style="font-size:14px; color:#666; text-align:center;">
+        Pour toute question, n'hésitez pas à nous contacter.<br/>
+        L'équipe Artiva vous souhaite une excellente expérience ! ✨
+      </p>
+    `,
+    pied: "L'équipe Artiva — Des produits artisanaux, authentiques et de qualité",
+  });
+
+  await sendMailWithLog(
+    {
+      fromName: "Artiva 🎉",
+      fromEmail: "artiva.app@gmail.com",
+      to,
+      subject: "🎉 Bienvenue sur Artiva ! Votre aventure commence ici",
+      html: htmlContent,
+    },
+    "Welcome"
+  );
+};
+
+// =============================================================================
+// EMAIL 2 : Wouhou + Bon d'achat 2000 FCFA
+// =============================================================================
+
+const sendWouhouGiftEmail = async (to, name) => {
+  // Générer un code promo unique (ex: WELCOME-XXXX)
+  const generatePromoCode = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code = 'WELCOME-';
+    for (let i = 0; i < 6; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+  };
+
+  const promoCode = generatePromoCode();
+  const expirationDate = new Date();
+  expirationDate.setDate(expirationDate.getDate() + 30); // Valable 30 jours
+
+  const htmlContent = carteEmail({
+    titre: "🎁 WOUHOU ! Un bon d'achat de 2000 FCFA pour vous !",
+    couleur: "#FF6B00",
+    corps: `
+      <p style="font-size:16px;">
+        Bonjour ${name || "Cher client"},
+      </p>
+      <p style="font-size:18px; text-align:center; font-weight:bold; color:#FF6B00;">
+        🎊 Vous venez de recevoir un bon d'achat de 2000 FCFA ! 🎊
+      </p>
+      <p style="font-size:15px; text-align:center;">
+        Pour vous souhaiter la bienvenue, Artiva vous offre <b>2000 FCFA</b> sur votre première commande !
+      </p>
+      <div style="text-align:center; margin:25px 0; padding:15px; background:#FFF3E0; border-radius:8px; border:2px dashed #FF6B00;">
+        <p style="font-size:14px; color:#666; margin:0;">Votre code promo</p>
+        <p style="font-size:32px; font-weight:bold; color:#FF6B00; margin:5px 0; letter-spacing:2px;">
+          ${promoCode}
+        </p>
+        <p style="font-size:12px; color:#999; margin:5px 0 0 0;">
+          Valable jusqu'au ${expirationDate.toLocaleDateString("fr-FR")}
+        </p>
+      </div>
+      <div style="text-align:center; margin:20px 0;">
+        <a href="https://artiva.app/catalog" style="
+          background:#FF6B00;
+          color:white;
+          padding:14px 35px;
+          text-decoration:none;
+          border-radius:5px;
+          font-weight:bold;
+          display:inline-block;
+        ">
+          🛍️ Profiter de mon bon d'achat
+        </a>
+      </div>
+      <p style="font-size:13px; color:#888; text-align:center; margin-top:15px;">
+        💡 Utilisez ce code lors de votre première commande.<br/>
+        Offre valable une seule fois, non cumulable avec d'autres promotions.
+      </p>
+    `,
+    pied: "L'équipe Artiva — Cadeau de bienvenue",
+  });
+
+  await sendMailWithLog(
+    {
+      fromName: "Artiva 🎁",
+      fromEmail: "artiva.app@gmail.com",
+      to,
+      subject: "🎁 WOUHOU ! 2000 FCFA offerts pour votre première commande !",
+      html: htmlContent,
+    },
+    "Wouhou-Gift"
+  );
+
+  // Retourner le code promo pour le sauvegarder en base de données
+  return { promoCode, expiresAt: expirationDate };
+};
 
 // =============================================================================
 // Envoi du code de connexion (2FA)
@@ -378,12 +489,7 @@ const sendResetPasswordCode = async (to, code) => {
 };
 
 // =============================================================================
-// NOUVEAU — Confirmation de changement de mot de passe
-// =============================================================================
-//
-// Différent du code de reset : celui-ci part APRÈS que le mot de passe a
-// changé avec succès. S'il arrive alors que l'utilisateur n'est pour rien
-// dans ce changement, c'est le signal d'une compromission du compte.
+// Confirmation de changement de mot de passe
 // =============================================================================
 
 const sendPasswordChangedEmail = async (to, name) => {
@@ -418,7 +524,6 @@ const sendPasswordChangedEmail = async (to, name) => {
 
 // =============================================================================
 // Envoi d'une nouvelle commande : client + admin
-// (inchangé)
 // =============================================================================
 
 const sendNewOrderEmails = async (userEmail, adminEmail, orderData) => {
@@ -635,13 +740,7 @@ const sendNewOrderEmails = async (userEmail, adminEmail, orderData) => {
 };
 
 // =============================================================================
-// NOUVEAU — Changement de statut d'une commande
-// =============================================================================
-//
-// Un seul mail générique pour tout le cycle de vie post-création : la
-// commande a été confirmée/en préparation, expédiée, livrée, annulée,
-// remboursée, ou son paiement a échoué. Le contenu varie avec le statut,
-// mais la structure d'appel reste la même partout où le statut change.
+// Changement de statut d'une commande
 // =============================================================================
 
 const STATUTS_EMAIL = {
@@ -687,7 +786,7 @@ const STATUTS_EMAIL = {
 
 const sendOrderStatusEmail = async (to, { orderNumber, status, trackingNumber }) => {
   const config = STATUTS_EMAIL[status];
-  if (!config) return; // statuts sans email dédié (pending, awaiting_payment, paid...)
+  if (!config) return;
 
   const htmlContent = carteEmail({
     titre: `${config.emoji} ${config.titre}`,
@@ -708,7 +807,7 @@ const sendOrderStatusEmail = async (to, { orderNumber, status, trackingNumber })
 };
 
 // =============================================================================
-// NOUVEAU — Produit de retour en stock (wishlist)
+// Produit de retour en stock (wishlist)
 // =============================================================================
 
 const sendWishlistRestockEmail = async (to, products) => {
@@ -755,15 +854,7 @@ const sendWishlistRestockEmail = async (to, products) => {
 };
 
 // =============================================================================
-// Exports CommonJS
-// =============================================================================
-// =============================================================================
-// NOUVEAU — Email de campagne marketing
-// =============================================================================
-//
-// Contrairement aux autres emails, le contenu HTML vient tel quel de
-// l'éditeur riche de l'admin : on ne le réenveloppe pas dans carteEmail(),
-// pour ne pas casser la mise en forme qu'il a choisie.
+// Email de campagne marketing
 // =============================================================================
 
 const sendCampaignEmail = async (to, { subject, html }) => {
@@ -779,6 +870,10 @@ const sendCampaignEmail = async (to, { subject, html }) => {
   );
 };
 
+// =============================================================================
+// EXPORTS
+// =============================================================================
+
 module.exports = {
   sendLoginCode,
   sendResetPasswordCode,
@@ -787,4 +882,6 @@ module.exports = {
   sendOrderStatusEmail,
   sendWishlistRestockEmail,
   sendCampaignEmail,
+  sendWelcomeEmail,
+  sendWouhouGiftEmail,
 };

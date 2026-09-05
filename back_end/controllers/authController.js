@@ -2,14 +2,19 @@
 const db = require("../config/db.js");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const { sendLoginCode, sendResetPasswordCode } = require("../utils/sendEmail.js");
+const { 
+  sendLoginCode, 
+  sendResetPasswordCode,
+  sendWelcomeEmail,
+  sendWouhouGiftEmail 
+} = require("../utils/sendEmail.js");
 require('dotenv').config();
 
 // ==========================
 // LOGIN ADMIN (sans 2FA)
 // ==========================
 const loginAdmin = async (req, res) => {
-  const { email, password } = req.body; // <-- DESTRUCTURING en premier
+  const { email, password } = req.body;
 
   console.log("BODY REÇU :", req.body);
   console.log("EMAIL REÇU :", email);
@@ -34,7 +39,6 @@ const loginAdmin = async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    // retirer le password_hash avant d’envoyer l’admin
     const { password_hash, ...safeAdmin } = admin;
 
     res.json({ token, admin: safeAdmin, message: "Connexion admin réussie" });
@@ -48,7 +52,7 @@ const loginAdmin = async (req, res) => {
 // UTILITAIRE
 // ==========================
 function generateCode() {
-  return Math.floor(100000 + Math.random() * 900000).toString(); // 6 chiffres
+  return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
 // ==========================
@@ -138,13 +142,30 @@ const registerUser = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, parseInt(process.env.PASSWORD_SALT_ROUNDS || "10"));
     const newUser = await db.query(
-      `INSERT INTO users (name,email,password_hash,address,phone)
-       VALUES ($1,$2,$3,$4,$5)
-       RETURNING id,name,email,role`,
+      `INSERT INTO users (name, email, password_hash, address, phone)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, name, email, role`,
       [name, email, hashedPassword, address, phone]
     );
 
-    res.status(201).json({ message: "Utilisateur créé !", user: newUser.rows[0] });
+    const user = newUser.rows[0];
+
+    // ✅ ENVOI DES DEUX EMAILS : BIENVENUE + CADEAU WOUHOU
+    try {
+      await Promise.all([
+        sendWelcomeEmail(email, name),
+        sendWouhouGiftEmail(email, name)
+      ]);
+      console.log(`✅ Emails de bienvenue et cadeau envoyés à ${email}`);
+    } catch (emailError) {
+      console.error(`❌ Erreur envoi des emails à ${email}:`, emailError.message);
+    }
+
+    res.status(201).json({
+      message: "🎉 Inscription réussie ! Vérifiez vos emails : un cadeau de bienvenue vous attend !",
+      user: user
+    });
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Erreur serveur" });
@@ -230,7 +251,7 @@ const verifyLoginCode = async (req, res) => {
 // REGISTER ADMIN
 // ==========================
 const registerAdmin = async (req, res) => {
-  const { email, password, role } = req.body;  // plus de name
+  const { email, password, role } = req.body;
   if (!email || !password)
     return res.status(400).json({ message: "Email et mot de passe requis" });
 
@@ -256,8 +277,9 @@ const registerAdmin = async (req, res) => {
   }
 };
 
-// Ajoutez cette fonction dans votre authController.js
-
+// ==========================
+// GOOGLE AUTH
+// ==========================
 const googleAuth = async (req, res) => {
   const { email, name, googleId, picture } = req.body;
 
@@ -279,7 +301,6 @@ const googleAuth = async (req, res) => {
     let user;
 
     if (userResult.rows.length === 0) {
-      // Nouvel utilisateur Google → password_hash prend la valeur par défaut ''
       const insertResult = await db.query(
         `INSERT INTO users (name, email, google_id, picture, is_email_verified, role, is_active, created_at)
          VALUES ($1, $2, $3, $4, true, 'customer', true, NOW())
@@ -289,8 +310,18 @@ const googleAuth = async (req, res) => {
       user = insertResult.rows[0];
       console.log(`[Google Auth] Nouvel utilisateur créé: ${email}`);
 
+      // ✅ Envoyer les emails de bienvenue et cadeau pour les inscriptions Google
+      try {
+        await Promise.all([
+          sendWelcomeEmail(email, user.name),
+          sendWouhouGiftEmail(email, user.name)
+        ]);
+        console.log(`✅ Emails de bienvenue et cadeau envoyés à ${email} (Google)`);
+      } catch (emailError) {
+        console.error(`❌ Erreur envoi des emails à ${email}:`, emailError.message);
+      }
+
     } else {
-      // Utilisateur existant → on met à jour google_id et picture en un seul UPDATE
       const updateResult = await db.query(
         `UPDATE users 
          SET 
