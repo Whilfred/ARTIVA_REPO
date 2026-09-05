@@ -25,5 +25,4 @@ router.get('/admin/:orderId', authMiddleware, adminMiddleware, orderController.g
 // PUT /api/orders/admin/:orderId/status - Mettre à jour le statut d'une commande (ADMIN)
 router.put('/admin/:orderId/status', authMiddleware, adminMiddleware, orderController.updateOrderStatusAdmin);
 
-
 module.exports = router;

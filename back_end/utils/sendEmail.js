@@ -298,6 +298,77 @@ const carteEmail = ({ titre, couleur, corps, pied }) => `
 `;
 
 // =============================================================================
+// CHANGEMENT DE STATUT D'UNE COMMANDE
+// =============================================================================
+
+const STATUTS_EMAIL = {
+  processing: {
+    emoji: "👨‍🍳",
+    couleur: "#2196F3",
+    titre: "Votre commande est en préparation",
+    texte: (n) => `Bonne nouvelle ! Votre commande <b>#${n}</b> est maintenant en cours de préparation par nos équipes.`,
+  },
+  shipped: {
+    emoji: "🚚",
+    couleur: "#2196F3",
+    titre: "Votre commande a été expédiée",
+    texte: (n, extra) =>
+      `Votre commande <b>#${n}</b> a été expédiée et est en route.` +
+      (extra?.trackingNumber ? `<br/>Numéro de suivi : <b>${extra.trackingNumber}</b>` : ""),
+  },
+  delivered: {
+    emoji: "📦",
+    couleur: "#4CAF50",
+    titre: "Votre commande a été livrée",
+    texte: (n) => `Excellente nouvelle ! Votre commande <b>#${n}</b> a été livrée. Profitez bien de vos articles !`,
+  },
+  cancelled: {
+    emoji: "❌",
+    couleur: "#c0392b",
+    titre: "Votre commande a été annulée",
+    texte: (n) => `Nous vous informons que votre commande <b>#${n}</b> a été annulée. Contactez-nous pour plus d'informations.`,
+  },
+  refunded: {
+    emoji: "💸",
+    couleur: "#c0392b",
+    titre: "Votre commande vous sera remboursée",
+    texte: (n) => `Votre commande <b>#${n}</b> a été annulée et sera remboursée après examen. Contactez-nous pour plus d'informations.`,
+  },
+  failed: {
+    emoji: "⚠️",
+    couleur: "#c0392b",
+    titre: "Le paiement de votre commande a échoué",
+    texte: (n) => `Le paiement de votre commande <b>#${n}</b> n'a pas pu être traité. Vous pouvez réessayer depuis votre compte.`,
+  },
+};
+
+const sendOrderStatusEmail = async (to, { orderNumber, status, trackingNumber }) => {
+  const config = STATUTS_EMAIL[status];
+  
+  if (!config) {
+    console.log(`⚠️ Aucun email configuré pour le statut: ${status}`);
+    return;
+  }
+
+  const htmlContent = carteEmail({
+    titre: `${config.emoji} ${config.titre}`,
+    couleur: config.couleur,
+    corps: `<p style="font-size:15px;">${config.texte(orderNumber, { trackingNumber })}</p>`,
+  });
+
+  await sendMailWithLog(
+    {
+      fromName: "Artiva 📦",
+      fromEmail: "artiva.app@gmail.com",
+      to,
+      subject: `${config.emoji} ${config.titre} — #${orderNumber}`,
+      html: htmlContent,
+    },
+    `Order-Status-${status}`
+  );
+};
+
+// =============================================================================
 // EMAIL 1 : Bienvenue
 // =============================================================================
 
@@ -358,7 +429,6 @@ const sendWelcomeEmail = async (to, name) => {
 // =============================================================================
 
 const sendWouhouGiftEmail = async (to, name) => {
-  // Générer un code promo unique (ex: WELCOME-XXXX)
   const generatePromoCode = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let code = 'WELCOME-';
@@ -370,7 +440,7 @@ const sendWouhouGiftEmail = async (to, name) => {
 
   const promoCode = generatePromoCode();
   const expirationDate = new Date();
-  expirationDate.setDate(expirationDate.getDate() + 30); // Valable 30 jours
+  expirationDate.setDate(expirationDate.getDate() + 30);
 
   const htmlContent = carteEmail({
     titre: "🎁 WOUHOU ! Un bon d'achat de 2000 FCFA pour vous !",
@@ -426,7 +496,6 @@ const sendWouhouGiftEmail = async (to, name) => {
     "Wouhou-Gift"
   );
 
-  // Retourner le code promo pour le sauvegarder en base de données
   return { promoCode, expiresAt: expirationDate };
 };
 
@@ -736,73 +805,6 @@ const sendNewOrderEmails = async (userEmail, adminEmail, orderData) => {
       `,
     },
     "Order-Admin"
-  );
-};
-
-// =============================================================================
-// Changement de statut d'une commande
-// =============================================================================
-
-const STATUTS_EMAIL = {
-  processing: {
-    emoji: "👨‍🍳",
-    couleur: "#2196F3",
-    titre: "Votre commande est en préparation",
-    texte: (n) => `Bonne nouvelle ! Votre commande <b>#${n}</b> est maintenant en cours de préparation par nos équipes.`,
-  },
-  shipped: {
-    emoji: "🚚",
-    couleur: "#2196F3",
-    titre: "Votre commande a été expédiée",
-    texte: (n, extra) =>
-      `Votre commande <b>#${n}</b> a été expédiée et est en route.` +
-      (extra?.trackingNumber ? `<br/>Numéro de suivi : <b>${extra.trackingNumber}</b>` : ""),
-  },
-  delivered: {
-    emoji: "📦",
-    couleur: "#4CAF50",
-    titre: "Votre commande a été livrée",
-    texte: (n) => `Excellente nouvelle ! Votre commande <b>#${n}</b> a été livrée. Profitez bien de vos articles !`,
-  },
-  cancelled: {
-    emoji: "❌",
-    couleur: "#c0392b",
-    titre: "Votre commande a été annulée",
-    texte: (n) => `Nous vous informons que votre commande <b>#${n}</b> a été annulée. Contactez-nous pour plus d'informations.`,
-  },
-  refunded: {
-    emoji: "💸",
-    couleur: "#c0392b",
-    titre: "Votre commande vous sera remboursée",
-    texte: (n) => `Votre commande <b>#${n}</b> a été annulée et sera remboursée après examen. Contactez-nous pour plus d'informations.`,
-  },
-  failed: {
-    emoji: "⚠️",
-    couleur: "#c0392b",
-    titre: "Le paiement de votre commande a échoué",
-    texte: (n) => `Le paiement de votre commande <b>#${n}</b> n'a pas pu être traité. Vous pouvez réessayer depuis votre compte.`,
-  },
-};
-
-const sendOrderStatusEmail = async (to, { orderNumber, status, trackingNumber }) => {
-  const config = STATUTS_EMAIL[status];
-  if (!config) return;
-
-  const htmlContent = carteEmail({
-    titre: `${config.emoji} ${config.titre}`,
-    couleur: config.couleur,
-    corps: `<p style="font-size:15px;">${config.texte(orderNumber, { trackingNumber })}</p>`,
-  });
-
-  await sendMailWithLog(
-    {
-      fromName: "Artiva 📦",
-      fromEmail: "artiva.app@gmail.com",
-      to,
-      subject: `${config.emoji} ${config.titre} — #${orderNumber}`,
-      html: htmlContent,
-    },
-    `Order-Status-${status}`
   );
 };
 

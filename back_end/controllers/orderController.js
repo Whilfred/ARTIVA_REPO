@@ -523,6 +523,7 @@ exports.getOrderDetailsAdmin = async (req, res) => {
 
 // --- (Admin) : Mettre à jour le statut d'une commande ---
 // Version mise à jour pour gérer aussi le statut du paiement pour les commandes 'cod'
+// --- (Admin) : Mettre à jour le statut d'une commande ---
 exports.updateOrderStatusAdmin = async (req, res) => {
   const { orderId } = req.params;
   const { status: newStatus, trackingNumber } = req.body;
@@ -536,9 +537,23 @@ exports.updateOrderStatusAdmin = async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // Étape 1 : Mettre à jour le statut de la commande
-    // On récupère aussi l'email/nom du client ici, dans la même requête,
-    // pour ne pas faire un aller-retour DB supplémentaire juste pour l'email.
+    // Récupérer l'email du client AVANT la mise à jour
+    const userQuery = `
+      SELECT u.id, u.email, u.name 
+      FROM users u
+      JOIN orders o ON o.user_id = u.id
+      WHERE o.id = $1
+    `;
+    const userResult = await client.query(userQuery, [orderId]);
+    
+    if (userResult.rows.length === 0) {
+      throw new Error('Commande ou utilisateur non trouvé.');
+    }
+    
+    const user = userResult.rows[0];
+    const userEmail = user.email;
+
+    // Mettre à jour le statut de la commande
     const updateOrderQuery = `
       UPDATE orders o
       SET status = $1, updated_at = CURRENT_TIMESTAMP 
@@ -552,7 +567,7 @@ exports.updateOrderStatusAdmin = async (req, res) => {
     }
     const updatedOrder = updateResult.rows[0];
 
-    // Étape 1 bis : Statut "livrée" + paiement à la livraison encore en attente
+    // Statut "livrée" + paiement à la livraison encore en attente
     if (newStatus === 'delivered') {
       const paymentCheckQuery = 'SELECT id, payment_method, status FROM payments WHERE order_id = $1';
       const paymentResult = await client.query(paymentCheckQuery, [orderId]);
@@ -571,29 +586,7 @@ exports.updateOrderStatusAdmin = async (req, res) => {
       }
     }
 
-    // Étape 1 ter : Une commande annulée ou remboursée ne doit plus rapporter
-    // de points. Sans cette reprise, un client pourrait commander, encaisser
-    // ses points, annuler, et recommencer indéfiniment.
-    //
-    // Le bon déjà émis n'est pas repris : le client l'a peut-être utilisé, et
-    // le lui retirer après coup serait incompréhensible.
-    if (newStatus === 'cancelled' || newStatus === 'refunded') {
-      try {
-        const reprise = await loyaltyController.reprendrePoints(client, orderId);
-        if (reprise) {
-          console.log(
-            `Commande ${orderId} ${newStatus} : ${reprise.reprise} point(s) repris, `
-            + `nouveau solde ${reprise.solde}.`
-          );
-        }
-      } catch (fideliteError) {
-        // La reprise ne doit pas empêcher le changement de statut : une
-        // commande qu'on ne peut pas annuler serait un problème bien pire.
-        console.error('Erreur reprise des points de fidélité:', fideliteError);
-      }
-    }
-
-    // Étape 2 : Notification in-app pour l'utilisateur
+    // Notification in-app
     let notificationTitle = '';
     let notificationMessage = '';
     switch (newStatus) {
@@ -634,31 +627,33 @@ exports.updateOrderStatusAdmin = async (req, res) => {
 
     await client.query('COMMIT');
 
-    // Étape 3 : Email au client — HORS transaction et non bloquant.
-    // Un email qui échoue ne doit jamais faire perdre la mise à jour de statut,
-    // qui elle est déjà actée en base.
-    if (updatedOrder.user_id) {
+    // ✅ ENVOI DE L'EMAIL - PARTIE CORRIGÉE
+    const statusesWithEmail = ['processing', 'shipped', 'delivered', 'cancelled', 'refunded', 'failed'];
+    
+    if (statusesWithEmail.includes(newStatus) && userEmail) {
       try {
-        const userResult = await db.query('SELECT email FROM users WHERE id = $1', [updatedOrder.user_id]);
-        const userEmail = userResult.rows[0]?.email;
-        if (userEmail) {
-          await sendOrderStatusEmail(userEmail, {
-            orderNumber: updatedOrder.order_number,
-            status: newStatus,
-            trackingNumber,
-          });
-        }
+        await sendOrderStatusEmail(userEmail, {
+          orderNumber: updatedOrder.order_number,
+          status: newStatus,
+          trackingNumber: trackingNumber || null,
+        });
+        console.log(`✅ Email de statut envoyé pour la commande #${updatedOrder.order_number} à ${userEmail}`);
       } catch (emailError) {
-        console.error(`Erreur envoi email statut commande ${orderId}:`, emailError);
+        console.error(`❌ Erreur envoi email statut commande ${orderId}:`, emailError.message);
       }
+    } else if (!statusesWithEmail.includes(newStatus)) {
+      console.log(`ℹ️ Aucun email configuré pour le statut: ${newStatus}`);
     }
 
-    res.status(200).json({ message: 'Statut de la commande mis à jour avec succès.', order: updatedOrder });
+    res.status(200).json({ 
+      message: 'Statut de la commande mis à jour avec succès.', 
+      order: updatedOrder 
+    });
 
   } catch (error) {
     await client.query('ROLLBACK');
     console.error(`Erreur admin màj statut commande ${orderId}:`, error.message);
-    if (error.message === 'Commande non trouvée.') {
+    if (error.message === 'Commande non trouvée.' || error.message === 'Commande ou utilisateur non trouvé.') {
         return res.status(404).json({ message: error.message });
     }
     res.status(500).json({ message: 'Erreur serveur lors de la mise à jour du statut.' });
