@@ -1109,4 +1109,42 @@ BEGIN
 END $$;
 
 
+-- -----------------------------------------------------------------------------
+-- Fidélité : cumul dépensé et palier de conversion
+-- -----------------------------------------------------------------------------
+-- Ces trois éléments sont exigés par back_end/controllers/loyaltyController.js
+-- sans avoir jamais été reportés ici. Sans eux, la conversion des points échoue
+-- avec « column total_spent does not exist » dès qu'un client atteint le seuil.
+-- -----------------------------------------------------------------------------
+
+-- Total dépensé sur la durée de vie du compte, hors commandes annulées ou
+-- remboursées. Sert à déterminer le diviseur appliqué à la valeur du bon.
+--
+-- Renseigné par le code lui-même : initialiserPointsUtilisateur() le recalcule
+-- depuis l'historique des commandes au premier passage, puis il est entretenu à
+-- chaque commande. La valeur de départ à 0 est donc voulue — elle n'est pas un
+-- solde erroné, mais un « pas encore calculé ».
+ALTER TABLE users ADD COLUMN IF NOT EXISTS total_spent NUMERIC(14,2) NOT NULL DEFAULT 0;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_total_spent_check') THEN
+    ALTER TABLE users ADD CONSTRAINT users_total_spent_check CHECK (total_spent >= 0);
+  END IF;
+END $$;
+
+-- Cumul dépensé APRÈS l'opération, à côté du solde de points. Même raison
+-- d'être que balance_after : rendre le journal lisible sans recalcul, et
+-- permettre de constater un écart entre le journal et users.total_spent.
+ALTER TABLE loyalty_ledger ADD COLUMN IF NOT EXISTS total_spent_after NUMERIC(14,2);
+
+-- 'initialized' s'ajoute aux motifs : c'est la ligne écrite lors du rattrapage
+-- d'un compte créé avant le programme, dont les points sont reconstitués depuis
+-- ses anciennes commandes. Sans ce motif, la contrainte refusait l'insertion et
+-- l'initialisation échouait silencieusement.
+ALTER TABLE loyalty_ledger DROP CONSTRAINT IF EXISTS loyalty_ledger_reason_check;
+ALTER TABLE loyalty_ledger ADD CONSTRAINT loyalty_ledger_reason_check
+  CHECK (reason IN ('earned', 'converted', 'revoked', 'manual', 'initialized'));
+
+
 -- Fin du script

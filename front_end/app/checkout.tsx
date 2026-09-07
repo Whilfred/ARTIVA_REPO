@@ -16,13 +16,20 @@ import { Stack, useRouter } from "expo-router";
 import { FontAwesome } from "@expo/vector-icons";
 import QRCode from "react-native-qrcode-svg";
 import ViewShot, { type ViewShotRef } from "react-native-view-shot";
-// expo-media-library n'est PAS importe ici volontairement.
+// Le QR Code n'est plus ecrit directement dans la galerie (expo-media-library).
 //
-// Depuis le SDK 57, ce module s'appuie sur le module natif
-// "ExpoMediaLibraryNext", qui n'a pas d'implementation web : un import en tete
-// de fichier fait planter tout l'ecran de commande dans un navigateur, avant
-// meme qu'il s'affiche. Il est donc charge a la demande, dans
-// handleDownloadQrCode, et uniquement sur mobile.
+// Ce module declare automatiquement READ_MEDIA_IMAGES et READ_MEDIA_VIDEO dans
+// le manifeste Android, ce que Google Play refuse : sa politique « Photos and
+// Video Permissions » impose le selecteur systeme des qu'on cible l'API 33+.
+// L'application n'a de toute facon besoin que d'*ecrire* une image, ce qui ne
+// demande aucune permission depuis Android 10. On passe donc par la feuille de
+// partage du systeme, ou l'utilisateur choisit « Enregistrer l'image ».
+//
+// Ces deux modules ont une implementation web, contrairement a
+// expo-media-library : l'import en tete de fichier ne casse plus l'ecran de
+// commande dans un navigateur.
+import { File, Paths } from "expo-file-system";
+import * as Sharing from "expo-sharing";
 import { Picker } from "@react-native-picker/picker";
 
 import { useCart } from "../context/CartContext";
@@ -479,28 +486,44 @@ const handleSubmitOrder = async () => {
     if (Platform.OS === "web") {
       Alert.alert(
         "Non disponible",
-        "L'enregistrement dans la galerie n'existe que sur l'application mobile. Faites une capture d'ecran pour conserver ce QR Code."
+        "L'enregistrement du QR Code n'existe que sur l'application mobile. Faites une capture d'ecran pour le conserver."
       );
       return;
     }
+    if (!qrCodeRef.current) {
+      Alert.alert("Erreur", "QR Code introuvable.");
+      return;
+    }
     try {
-      const MediaLibrary = await import("expo-media-library");
-      const permission = await MediaLibrary.requestPermissionsAsync(true);
-      if (permission.status !== "granted") {
-        Alert.alert("Permission refusée", "Autorisez l'accès aux photos pour sauvegarder le QR Code.");
+      const captureUri = await qrCodeRef.current.capture();
+      if (!captureUri) throw new Error("Capture du QR Code échouée");
+
+      if (!(await Sharing.isAvailableAsync())) {
+        Alert.alert(
+          "Non disponible",
+          "Le partage n'est pas accessible sur cet appareil. Faites une capture d'ecran pour conserver ce QR Code."
+        );
         return;
       }
-      if (!qrCodeRef.current) {
-        Alert.alert("Erreur", "QR Code introuvable.");
-        return;
-      }
-      const uri = await qrCodeRef.current.capture();
-      if (!uri) throw new Error("Capture du QR Code échouée");
-      const asset = await MediaLibrary.createAssetAsync(uri);
-      await MediaLibrary.createAlbumAsync("Commandes Artiva", asset, false);
-      Alert.alert("Succès", "QR Code enregistré dans votre galerie (Album: Commandes Artiva)");
+
+      // react-native-view-shot ecrit un fichier temporaire au nom illisible
+      // (ReactNative-snapshot-image1234.png). On le recopie sous un nom parlant :
+      // c'est ce nom que l'utilisateur retrouvera dans sa galerie.
+      const numero = (orderConfirmationData?.orderNumber ?? "Artiva").replace(/[^A-Za-z0-9_-]/g, "-");
+      const source = new File(captureUri.startsWith("file://") ? captureUri : `file://${captureUri}`);
+      const destination = new File(Paths.cache, `QR-Commande-${numero}.png`);
+      await source.copy(destination, { overwrite: true });
+
+      // La feuille de partage propose « Enregistrer l'image » (galerie), mais
+      // aussi WhatsApp, e-mail, Drive... : le client garde son QR Code comme il
+      // veut, sans qu'on demande la moindre permission.
+      await Sharing.shareAsync(destination.uri, {
+        mimeType: "image/png",
+        UTI: "public.png",
+        dialogTitle: "Enregistrer le QR Code de la commande",
+      });
     } catch (error) {
-      Alert.alert("Erreur", "Impossible de sauvegarder le QR Code.");
+      Alert.alert("Erreur", "Impossible d'enregistrer le QR Code.");
     }
   };
 
@@ -991,7 +1014,7 @@ const handleSubmitOrder = async () => {
                 style={[styles.submitButton, { backgroundColor: colors.tint, paddingHorizontal: 30, marginBottom: 15 }]}
                 onPress={handleDownloadQrCode}
               >
-                <Text style={{ color: "white", fontSize: 16, fontWeight: "700" }}>Télécharger le QR Code</Text>
+                <Text style={{ color: "white", fontSize: 16, fontWeight: "700" }}>Enregistrer le QR Code</Text>
               </TouchableOpacity>
             </>
           )}

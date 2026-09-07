@@ -4,7 +4,7 @@ import 'dotenv/config';
 export default {
   name: "Artiva",
   slug: "artiva",
-  version: "1.5.8",
+  version: "1.5.9",
   sdkVersion: "57.0.0",
   platforms: ["ios", "android", "web"],
   orientation: "portrait",
@@ -17,10 +17,9 @@ export default {
     backgroundColor: "#ffffff"
   },
   ios: {
-    supportsTablet: true,
-    infoPlist: {
-      NSPhotoLibraryAddUsageDescription: "Cette app a besoin d'accéder à vos photos pour sauvegarder le QR Code."
-    }
+    // Plus de NSPhotoLibraryAddUsageDescription : le QR Code passe par la
+    // feuille de partage du systeme, l'app ne touche plus a la photothèque.
+    supportsTablet: true
   },
   android: {
     adaptiveIcon: {
@@ -32,7 +31,7 @@ export default {
       "CAMERA"
     ],
     package: "com.fathanemarcos.artiva",
-    versionCode: 72
+    versionCode: 73
   },
   web: {
     bundler: "metro",
@@ -48,7 +47,8 @@ export default {
     "expo-splash-screen",
     "expo-status-bar",
     "expo-web-browser",
-    "expo-video"
+    "expo-video",
+    "expo-sharing"
   ],
   experiments: {
     typedRoutes: true
