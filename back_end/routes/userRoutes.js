@@ -36,4 +36,11 @@ router.put('/:id', authMiddleware, adminMiddleware, userController.updateUserByA
 router.delete('/:id', authMiddleware, adminMiddleware, userController.deleteUserByAdmin);
 // PUT /api/users/:id/anonymize - Anonymiser un utilisateur en conservant ses données (Admin)
 router.put('/:id/anonymize', authMiddleware, adminMiddleware, userController.anonymizeUserByAdmin);
+
+// Enregistrer le token FCM
+router.post('/fcm-token', authMiddleware, userController.saveFcmToken);
+
+// Supprimer le token FCM (à la déconnexion)
+router.delete('/fcm-token', authMiddleware, userController.removeFcmToken);
+
 module.exports = router;

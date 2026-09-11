@@ -386,3 +386,68 @@ exports.changePassword = async (req, res) => {
     res.status(500).json({ message: 'Erreur serveur lors du changement de mot de passe.' });
   }
 };
+
+// =============================================================================
+// FCM TOKEN - Enregistrer le token de notifications push
+// =============================================================================
+
+exports.saveFcmToken = async (req, res) => {
+  const userId = req.user.id;
+  const { fcmToken, platform, deviceId } = req.body;
+
+  if (!fcmToken) {
+    return res.status(400).json({ message: 'Token FCM requis' });
+  }
+
+  try {
+    // Mettre à jour le token FCM de l'utilisateur
+    const result = await db.query(
+      `UPDATE users 
+       SET fcm_token = $1, 
+           fcm_platform = $2,
+           fcm_updated_at = CURRENT_TIMESTAMP
+       WHERE id = $3
+       RETURNING id, email, fcm_token, fcm_platform`,
+      [fcmToken, platform || 'unknown', userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé' });
+    }
+
+    console.log(`✅ Token FCM enregistré pour user ${userId} (${platform}):`, fcmToken);
+
+    res.status(200).json({
+      message: 'Token FCM enregistré avec succès',
+      user: result.rows[0],
+    });
+  } catch (error) {
+    console.error('❌ Erreur enregistrement token FCM:', error);
+    res.status(500).json({ message: 'Erreur serveur lors de l\'enregistrement du token' });
+  }
+};
+
+// =============================================================================
+// FCM TOKEN - Supprimer le token (à la déconnexion)
+// =============================================================================
+
+exports.removeFcmToken = async (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    await db.query(
+      `UPDATE users 
+       SET fcm_token = NULL, 
+           fcm_platform = NULL,
+           fcm_updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1`,
+      [userId]
+    );
+
+    console.log(`🗑️ Token FCM supprimé pour user ${userId}`);
+    res.status(200).json({ message: 'Token FCM supprimé' });
+  } catch (error) {
+    console.error('❌ Erreur suppression token FCM:', error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+};

@@ -6,6 +6,8 @@ const livraisonController = require('../controllers/livraisonController');
 const { resoudreZone } = require('../utils/shipping');
 const { v4: uuidv4 } = require('uuid');
 const { sendNewOrderEmails, sendOrderStatusEmail } = require("../utils/sendEmail.js");
+const { sendPushNotification } = require("../services/fcmService");
+
 // --- Créer une nouvelle commande (CLIENT) ---
 exports.createOrder = async (req, res) => {
   const userId = req.user.id;
@@ -91,12 +93,6 @@ exports.createOrder = async (req, res) => {
     }
 
     // --- Frais de livraison --------------------------------------------------
-    // Recalculés ici à partir de la destination, et non repris de la requête.
-    // Jusqu'ici le serveur acceptait le montant annoncé par l'application :
-    // « shipping_cost: 0 » suffisait à se faire livrer gratuitement.
-    // Une seule résolution : la zone porte à la fois le tarif et son libellé.
-    // La grille est lue en base (voir db/init/08_zones_livraison.sql), donc un
-    // changement de tarif depuis le panel s'applique à la commande suivante.
     const zone          = await resoudreZone(client, shipping_address.country, shipping_address.city);
     const fraisNormaux  = zone.cost;
     const zoneLivraison = zone.label;
@@ -109,20 +105,11 @@ exports.createOrder = async (req, res) => {
     }
 
     // --- Livraison gratuite méritée ------------------------------------------
-    // L'avantage est verrouillé (FOR UPDATE) avant d'être appliqué : deux
-    // commandes lancées en même temps ne peuvent pas consommer le même droit.
-    // Il est cherché ici, et non annoncé par l'application, pour la même raison
-    // que les frais eux-mêmes.
     const avantageLivraison = await livraisonController.avantageDisponible(client, userId, true);
     const livraisonOfferte  = Boolean(avantageLivraison);
     const finalShippingCost = livraisonOfferte ? 0 : fraisNormaux;
 
     // --- Code promotionnel ---------------------------------------------------
-    // La remise est revalidée ICI, dans la transaction, et jamais reprise de ce
-    // que l'écran de paiement a calculé : c'est le seul endroit où l'on connaît
-    // le contenu réel du panier et où le quota du code peut être verrouillé.
-    // Si le code est devenu invalide entre l'écran et la validation (expiré,
-    // épuisé), la commande est refusée plutôt que passée au mauvais prix.
     let discountAmount = 0;
     let appliedPromoCode = null;
     let appliedPromo = null;
@@ -141,21 +128,16 @@ exports.createOrder = async (req, res) => {
       appliedPromoCode = verif.promo.code;
     }
 
-    // La remise porte sur les produits seuls : les frais de livraison sont une
-    // dépense réelle pour la boutique et restent dus.
+    // La remise porte sur les produits seuls
     const calculatedTotal = productsTotal - discountAmount + finalShippingCost;
     let finalTotalAmount = frontendTotalAmount !== undefined ? parseFloat(frontendTotalAmount) : calculatedTotal;
 
-    // Vérification de cohérence
     if (Math.abs(finalTotalAmount - calculatedTotal) > 1) {
       console.warn(`⚠️ Incohérence montant: reçu=${finalTotalAmount}, calculé=${calculatedTotal}`);
       finalTotalAmount = calculatedTotal;
     }
 
-    // ✅ Utiliser le status envoyé par le frontend ('pending' ou 'awaiting_payment')
     const orderStatus = status || 'pending';
-    
-    // ✅ Utiliser la devise envoyée ('XOF' au lieu de 'FCFA')
     const finalCurrency = currency || 'XOF';
 
     // 2. Créer la commande
@@ -188,8 +170,7 @@ exports.createOrder = async (req, res) => {
 
     const createdOrder = orderResult.rows[0];
 
-    // Journaliser l'utilisation du code, dans la même transaction que la
-    // commande : si celle-ci échoue plus loin, le quota n'est pas consommé.
+    // Journaliser l'utilisation du code
     if (appliedPromo) {
       await client.query(
         `INSERT INTO promo_code_usages (promo_code_id, user_id, order_id, discount_amount)
@@ -202,10 +183,7 @@ exports.createOrder = async (req, res) => {
       );
     }
 
-    // Consommer l'avantage livraison. Le UPDATE est conditionné à un avantage
-    // encore libre : s'il ne modifie aucune ligne, deux commandes ont couru
-    // ensemble et la nôtre doit échouer plutôt que d'offrir une seconde fois
-    // un droit déjà dépensé.
+    // Consommer l'avantage livraison
     if (avantageLivraison) {
       const consomme = await livraisonController.consommerAvantage(
         client, avantageLivraison.id, createdOrder.id, fraisNormaux
@@ -255,7 +233,7 @@ exports.createOrder = async (req, res) => {
       ]
     );
 
-    // 5. Notification
+    // 5. Notification in-app
     await client.query(
       `INSERT INTO notifications (user_id, type, title, message, link_url)
        VALUES ($1, 'order_placed', $2, $3, $4)`,
@@ -267,10 +245,7 @@ exports.createOrder = async (req, res) => {
       ]
     );
 
-    // 5 bis. La commande vient-elle de faire franchir le seuil de livraison
-    // gratuite ? Évalué après l'insertion, pour que la commande en cours entre
-    // elle-même dans le cumul, et dans la transaction pour qu'un échec plus
-    // loin n'accorde pas un avantage sur une commande qui n'existera pas.
+    // 5 bis. Livraison gratuite débloquée
     let avantageGagne = null;
     try {
       avantageGagne = await livraisonController.evaluerGain(client, userId, createdOrder.id);
@@ -288,17 +263,10 @@ exports.createOrder = async (req, res) => {
         );
       }
     } catch (avantageError) {
-      // Un échec ici ne doit pas faire perdre la commande au client : elle est
-      // payée et valide. L'avantage manqué se rattrape, une commande perdue non.
       console.error('Erreur évaluation livraison gratuite:', avantageError);
     }
 
-    // 5 ter. Points de fidélité. Comptés sur le montant des produits AVANT
-    // remise et hors livraison : c'est la même assiette que le seuil de
-    // livraison gratuite, pour que deux mécaniques voisines ne donnent pas des
-    // chiffres différents sur la même commande.
-    //
-    // Un échec ici ne doit pas non plus faire perdre la commande.
+    // 5 ter. Points de fidélité
     let gainFidelite = null;
     try {
       gainFidelite = await loyaltyController.crediterPoints(
@@ -321,14 +289,10 @@ exports.createOrder = async (req, res) => {
         items: orderItemsData,
         shipping_address,
         order_status: orderStatus,
-        // Récapitulatif financier : sans ces trois lignes, l'email annonçait un
-        // montant sans dire d'où il venait — impossible d'y voir une remise.
         products_total: productsTotal,
         shipping_cost: finalShippingCost,
         promo_code: appliedPromoCode,
         discount_amount: discountAmount,
-        // Livraison offerte : shipping_cost vaut 0, ce qui ne dit pas POURQUOI.
-        // Sans ces deux champs, l'email laisserait croire à un oubli de frais.
         free_shipping_applied: livraisonOfferte,
         shipping_normal: fraisNormaux,
         loyalty: gainFidelite,
@@ -338,7 +302,6 @@ exports.createOrder = async (req, res) => {
       });
     } catch (emailError) {
       console.error("Erreur envoi email:", emailError);
-      // On continue même si l'email échoue
     }
 
     await client.query('COMMIT');
@@ -349,6 +312,26 @@ exports.createOrder = async (req, res) => {
       `${avantageGagne ? ' | 🎁 avantage livraison acquis' : ''}`
     );
 
+    // ✅ NOUVEAU : Notification PUSH "commande reçue"
+    try {
+      const tokenResult = await db.query(
+        'SELECT fcm_token FROM users WHERE id = $1 AND fcm_token IS NOT NULL',
+        [userId]
+      );
+      if (tokenResult.rows.length > 0) {
+        await sendPushNotification(tokenResult.rows[0].fcm_token, {
+          title: '🛒 Commande reçue !',
+          body: `Votre commande #${createdOrder.order_number} a bien été enregistrée.`,
+          data: { screen: 'order', orderId: createdOrder.id },
+        });
+        console.log(`📲 Push "commande reçue" envoyée à user ${userId}`);
+      } else {
+        console.log(`ℹ️ Pas de token FCM pour user ${userId}`);
+      }
+    } catch (notifError) {
+      console.error('Erreur push commande:', notifError.message);
+    }
+
     res.status(201).json({
       message: "Commande créée avec succès !",
       order: createdOrder
@@ -358,10 +341,6 @@ exports.createOrder = async (req, res) => {
     await client.query('ROLLBACK');
     console.error("❌ Erreur création commande:", error);
 
-    // Un code promo refusé (expiré, épuisé, montant insuffisant) porte son
-    // propre code HTTP : c'est une réponse métier destinée au client, pas une
-    // panne du serveur. Sans cela, l'application afficherait « erreur serveur »
-    // là où il faut lire « ce code a expiré ».
     if (error.statusCode) {
       return res.status(error.statusCode).json({ message: error.message });
     }
@@ -381,7 +360,6 @@ exports.createOrder = async (req, res) => {
 
 // --- Récupérer les commandes de l'utilisateur connecté (CLIENT) ---
 exports.getUserOrders = async (req, res) => {
-  
   try {
     const userId = req.user.id;
     const ordersQuery = `
@@ -403,7 +381,7 @@ exports.getUserOrders = async (req, res) => {
         WHERE oi.order_id = $1
         ORDER BY oi.id; `;
       const { rows: items } = await db.query(itemsQuery, [order.orderId]);
-      return { ...order, products: items }; // 'products' est ce que le frontend ProfileScreen attendait
+      return { ...order, products: items };
     }));
     res.status(200).json(ordersWithProducts);
   } catch (error) {
@@ -424,7 +402,7 @@ exports.getAllOrdersAdmin = async (req, res) => {
       o.shipping_address, o.billing_address, o.notes,
       o.promo_code, o.discount_amount, o.free_shipping_applied,
       o.created_at as "createdAt", o.updated_at as "updatedAt",
-      COUNT(*) OVER() AS total_count -- Compte total pour la pagination
+      COUNT(*) OVER() AS total_count
     FROM orders o
     LEFT JOIN users u ON o.user_id = u.id
   `;
@@ -442,14 +420,13 @@ exports.getAllOrdersAdmin = async (req, res) => {
   }
   if (date_from) {
     whereClauses.push(`o.created_at >= $${paramIndex++}`);
-    queryParams.push(date_from); // Format YYYY-MM-DD
+    queryParams.push(date_from);
   }
   if (date_to) {
-    // Pour inclure toute la journée, on peut cibler le début du jour suivant
     const nextDay = new Date(date_to);
     nextDay.setDate(nextDay.getDate() + 1);
     whereClauses.push(`o.created_at < $${paramIndex++}`);
-    queryParams.push(nextDay.toISOString().split('T')[0]); // Format YYYY-MM-DD
+    queryParams.push(nextDay.toISOString().split('T')[0]);
   }
 
   if (whereClauses.length > 0) {
@@ -461,11 +438,9 @@ exports.getAllOrdersAdmin = async (req, res) => {
   
   try {
     const { rows } = await db.query(query, queryParams);
-    // Le total_count sera le même pour toutes les lignes, on le prend de la première s'il y en a
     const totalItems = rows.length > 0 ? parseInt(rows[0].total_count, 10) : 0;
     const totalPages = Math.ceil(totalItems / limit);
 
-    // Retirer total_count de chaque objet commande avant de renvoyer
     const ordersData = rows.map(({total_count, ...order}) => order);
 
     res.status(200).json({
@@ -482,7 +457,6 @@ exports.getAllOrdersAdmin = async (req, res) => {
 
 // --- (Admin) : Récupérer les détails d'UNE commande spécifique ---
 exports.getOrderDetailsAdmin = async (req, res) => {
-  // ... (inchangé, déjà bon)
   const { orderId } = req.params;
   try {
     const orderQuery = `
@@ -512,7 +486,7 @@ exports.getOrderDetailsAdmin = async (req, res) => {
       WHERE oi.order_id = $1 ORDER BY oi.id;
     `;
     const itemsResult = await db.query(itemsQuery, [orderId]);
-    orderDetails.items = itemsResult.rows; // Renommé en 'items' pour plus de clarté
+    orderDetails.items = itemsResult.rows;
 
     res.status(200).json(orderDetails);
   } catch (error) {
@@ -521,8 +495,6 @@ exports.getOrderDetailsAdmin = async (req, res) => {
   }
 };
 
-// --- (Admin) : Mettre à jour le statut d'une commande ---
-// Version mise à jour pour gérer aussi le statut du paiement pour les commandes 'cod'
 // --- (Admin) : Mettre à jour le statut d'une commande ---
 exports.updateOrderStatusAdmin = async (req, res) => {
   const { orderId } = req.params;
@@ -627,7 +599,7 @@ exports.updateOrderStatusAdmin = async (req, res) => {
 
     await client.query('COMMIT');
 
-    // ✅ ENVOI DE L'EMAIL - PARTIE CORRIGÉE
+    // ✅ ENVOI DE L'EMAIL
     const statusesWithEmail = ['processing', 'shipped', 'delivered', 'cancelled', 'refunded', 'failed'];
     
     if (statusesWithEmail.includes(newStatus) && userEmail) {
@@ -643,6 +615,58 @@ exports.updateOrderStatusAdmin = async (req, res) => {
       }
     } else if (!statusesWithEmail.includes(newStatus)) {
       console.log(`ℹ️ Aucun email configuré pour le statut: ${newStatus}`);
+    }
+
+    // ✅ NOUVEAU : Notification PUSH "changement de statut"
+    try {
+      const tokenResult = await db.query(
+        'SELECT fcm_token FROM users WHERE id = $1 AND fcm_token IS NOT NULL',
+        [updatedOrder.user_id]
+      );
+
+      if (tokenResult.rows.length > 0) {
+        const pushMessages = {
+          processing: {
+            title: '👨‍🍳 Commande en préparation',
+            body: `Votre commande #${updatedOrder.order_number} est en cours de préparation.`,
+          },
+          shipped: {
+            title: '🚚 Commande expédiée !',
+            body: `Votre commande #${updatedOrder.order_number} est en route.` +
+              (trackingNumber ? ` Suivi : ${trackingNumber}` : ''),
+          },
+          delivered: {
+            title: '📦 Commande livrée !',
+            body: `Votre commande #${updatedOrder.order_number} a été livrée. Bonne découverte !`,
+          },
+          cancelled: {
+            title: '❌ Commande annulée',
+            body: `Votre commande #${updatedOrder.order_number} a été annulée.`,
+          },
+          refunded: {
+            title: '💸 Remboursement en cours',
+            body: `Votre commande #${updatedOrder.order_number} sera remboursée.`,
+          },
+          failed: {
+            title: '⚠️ Paiement échoué',
+            body: `Le paiement de votre commande #${updatedOrder.order_number} a échoué.`,
+          },
+        };
+
+        const msg = pushMessages[newStatus];
+        if (msg) {
+          await sendPushNotification(tokenResult.rows[0].fcm_token, {
+            title: msg.title,
+            body: msg.body,
+            data: { screen: 'order', orderId: updatedOrder.id },
+          });
+          console.log(`📲 Push "${newStatus}" envoyée à user ${updatedOrder.user_id}`);
+        }
+      } else {
+        console.log(`ℹ️ Pas de token FCM pour user ${updatedOrder.user_id}`);
+      }
+    } catch (notifError) {
+      console.error('❌ Erreur push statut:', notifError.message);
     }
 
     res.status(200).json({ 
@@ -664,7 +688,7 @@ exports.updateOrderStatusAdmin = async (req, res) => {
 
 // NOUVEAU : Récupérer les détails d'UNE commande spécifique pour l'UTILISATEUR CONNECTÉ
 exports.getUserOrderDetail = async (req, res) => {
-  const userId = req.user.id; // De authMiddleware
+  const userId = req.user.id;
   const { orderId } = req.params;
 
   try {
@@ -676,7 +700,7 @@ exports.getUserOrderDetail = async (req, res) => {
         o.shipping_method, o.shipping_cost,
         o.created_at as "createdAt", o.updated_at as "updatedAt"
       FROM orders o
-      WHERE o.id = $1 AND o.user_id = $2; -- S'ASSURER QUE LA COMMANDE APPARTIENT À L'UTILISATEUR
+      WHERE o.id = $1 AND o.user_id = $2;
     `;
     const orderResult = await db.query(orderQuery, [orderId, userId]);
 
@@ -685,24 +709,15 @@ exports.getUserOrderDetail = async (req, res) => {
     }
     const orderDetails = orderResult.rows[0];
 
-    // Récupérer les items de la commande
     const itemsQuery = `
       SELECT 
         oi.id as "itemId", oi.product_id, oi.product_name, oi.sku,
         oi.quantity, oi.unit_price, oi.subtotal
-        -- Optionnel: joindre products pour avoir l'image actuelle du produit si besoin
-        -- , p.image_url as "productImageUrl" 
-        -- FROM order_items oi JOIN products p ON oi.product_id = p.id
       FROM order_items oi
       WHERE oi.order_id = $1 ORDER BY oi.id;
     `;
     const itemsResult = await db.query(itemsQuery, [orderId]);
-    orderDetails.items = itemsResult.rows.map(item => ({
-        ...item,
-        // Si tu veux formater le prix ici (sinon le frontend le fera)
-        // unit_price: parseFloat(item.unit_price).toFixed(2),
-        // subtotal: parseFloat(item.subtotal).toFixed(2),
-    }));
+    orderDetails.items = itemsResult.rows.map(item => ({ ...item }));
 
     res.status(200).json(orderDetails);
   } catch (error) {

@@ -1,6 +1,6 @@
 // ARTIVA/front_end/app/_layout.tsx
-import React, { useEffect } from 'react';
-import { Stack, SplashScreen, ThemeProvider, DarkTheme, DefaultTheme } from 'expo-router';
+import React, { useEffect, useRef } from 'react';
+import { Stack, SplashScreen, ThemeProvider, DarkTheme, DefaultTheme, router } from 'expo-router';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { CartProvider } from '../context/CartContext';
 import { WishlistProvider } from '../context/WishlistContext';
@@ -8,13 +8,17 @@ import { I18nextProvider } from 'react-i18next';
 import i18n from '../i18n';
 import LoadingArtiva from './product/LoadingArtiva';
 
-// Depuis le SDK 56, expo-router refuse de cohabiter avec react-navigation :
-// il fournit lui-meme ThemeProvider, DarkTheme et DefaultTheme.
+// ✅ AJOUT : import du service de notifications
+import {
+  registerForPushNotifications,
+  setupNotificationListeners,
+} from '../services/pushNotificationService';
 
 SplashScreen.preventAutoHideAsync();
 
 function AppNavigationStack() {
-  const { isLoading, effectiveAppColorScheme } = useAuth();
+  const { isLoading, effectiveAppColorScheme, userToken } = useAuth();
+  const notificationInitialized = useRef(false);
 
   const navigationTheme = effectiveAppColorScheme === 'dark' ? DarkTheme : DefaultTheme;
 
@@ -27,7 +31,69 @@ function AppNavigationStack() {
     }
   }, [isLoading, effectiveAppColorScheme]);
 
-  // ✅ CORRECTION : Utiliser effectiveAppColorScheme au lieu de currentScheme
+  // ✅ AJOUT : Initialiser les notifications quand l'utilisateur est connecté
+  useEffect(() => {
+    // Ne pas initialiser si pas connecté, si en chargement, ou si déjà fait
+    if (!userToken || isLoading || notificationInitialized.current) {
+      return;
+    }
+
+    notificationInitialized.current = true;
+    console.log("🔔 Initialisation des notifications push...");
+
+    const initPushNotifications = async () => {
+      try {
+        const token = await registerForPushNotifications();
+        if (token) {
+          console.log('✅ Notifications push initialisées avec succès');
+        }
+      } catch (error) {
+        console.error('❌ Erreur initialisation push:', error);
+      }
+    };
+
+    initPushNotifications();
+
+    // Configurer les écouteurs de notifications
+    const cleanup = setupNotificationListeners(
+      // Notification reçue (app au premier plan)
+      (notification) => {
+        const { title, body } = notification.request.content;
+        console.log('📨 Notification reçue:', { title, body });
+      },
+      // Notification cliquée (navigation)
+      (response) => {
+        const data = response.notification.request.content.data;
+        console.log('📱 Notification cliquée, données:', data);
+
+        // Navigation selon le type de notification
+        if (data?.screen === 'order' && data?.orderId) {
+          router.push(`/orders/${data.orderId}`);
+        } else if (data?.screen === 'product' && data?.productId) {
+          router.push(`/product/${data.productId}`);
+        } else if (data?.screen === 'wishlist') {
+          router.push('/(tabs)');
+        } else if (data?.screen === 'notifications') {
+          router.push('/notifications');
+        } else if (data?.screen === 'promotions') {
+          router.push('/(tabs)');
+        }
+      }
+    );
+
+    // Nettoyage
+    return () => {
+      cleanup();
+    };
+  }, [userToken, isLoading]);
+
+  // Réinitialiser le flag lors de la déconnexion
+  useEffect(() => {
+    if (!userToken) {
+      notificationInitialized.current = false;
+    }
+  }, [userToken]);
+
   if (isLoading) {
     return <LoadingArtiva theme={effectiveAppColorScheme || 'light'} />;
   }
