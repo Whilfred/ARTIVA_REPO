@@ -1,6 +1,7 @@
 const { initializeApp, getApps, cert } = require('firebase-admin/app');
 const { getMessaging } = require('firebase-admin/messaging');
 const path = require('path');
+const fs = require('fs');
 
 // =============================================================================
 // Initialisation Firebase Admin (une seule fois)
@@ -10,9 +11,26 @@ let messaging = null;
 
 if (getApps().length === 0) {
   try {
-    const serviceAccount = require(
-      path.join(__dirname, '../config/firebase-service-account.json')
-    );
+    let serviceAccount;
+
+    // 1. En PRODUCTION : lire depuis la variable d'environnement (base64)
+    if (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
+      const decoded = Buffer.from(
+        process.env.FIREBASE_SERVICE_ACCOUNT_BASE64,
+        'base64'
+      ).toString('utf8');
+      serviceAccount = JSON.parse(decoded);
+      console.log('✅ Firebase Admin configuré via variable d\'environnement');
+    }
+    // 2. En LOCAL : lire depuis le fichier
+    else {
+      const filePath = path.join(__dirname, '../config/firebase-service-account.json');
+      if (!fs.existsSync(filePath)) {
+        throw new Error(`Fichier Firebase introuvable : ${filePath}`);
+      }
+      serviceAccount = require(filePath);
+      console.log('✅ Firebase Admin configuré via fichier local');
+    }
 
     initializeApp({
       credential: cert(serviceAccount),
@@ -24,7 +42,17 @@ if (getApps().length === 0) {
   }
 }
 
-messaging = getMessaging();
+// Initialiser messaging seulement si Firebase a bien démarré
+if (getApps().length > 0) {
+  messaging = getMessaging();
+} else {
+  console.warn('⚠️ Firebase Messaging non disponible');
+  messaging = {
+    send: async () => {
+      throw new Error('Firebase non initialisé');
+    },
+  };
+}
 
 // =============================================================================
 // Envoyer une notification push à UN utilisateur
