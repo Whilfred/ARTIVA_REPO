@@ -13,8 +13,8 @@ import { Appearance, Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_BASE_URL } from "../constants/Api"; // adresse du backend (locale ou prod) — voir ce fichier
 import { normalizeColorScheme } from "../constants/ColorScheme";
-// import { GoogleSignin } from '@react-native-google-signin/google-signin'; // COMMENTÉ
-// import { googleConfig } from '../constants/GoogleAuthConfig'; // COMMENTÉ
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { googleConfig } from '../constants/GoogleAuthConfig';
 
 // --- Constantes ---
 const TOKEN_KEY = "artiva-auth-token";
@@ -39,7 +39,7 @@ export type AppColorSchemePreference = "light" | "dark" | "system";
 interface AuthContextType {
   signIn: (token: string, userData: User) => Promise<void>;
   signOut: () => Promise<void>;
-  // signInWithGoogle: () => Promise<void>; // COMMENTÉ
+  signInWithGoogle: () => Promise<void>;
   user: User | null;
   userToken: string | null;
   isLoading: boolean;
@@ -79,15 +79,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   >(normalizeColorScheme(Appearance.getColorScheme()));
   const [isThemePreferenceLoading, setIsThemePreferenceLoading] = useState(true);
 
-  // ===== INITIALISATION GOOGLE SIGN-IN ===== COMMENTÉ
-  // useEffect(() => {
-  //   GoogleSignin.configure({
-  //     webClientId: googleConfig.webClientId,
-  //     offlineAccess: true,
-  //     forceCodeForRefreshToken: true,
-  //   });
-  //   console.log("AuthContext: GoogleSignin configuré");
-  // }, []);
+  // ===== INITIALISATION GOOGLE SIGN-IN =====
+  useEffect(() => {
+    GoogleSignin.configure({
+      webClientId: googleConfig.webClientId,
+      offlineAccess: true,
+      forceCodeForRefreshToken: true,
+    });
+    console.log("AuthContext: GoogleSignin configuré");
+  }, []);
 
   // 1. Charger le token et les informations utilisateur au démarrage
   useEffect(() => {
@@ -207,7 +207,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     setIsAuthDataLoading(true);
     try {
-      // await GoogleSignin.signOut(); // COMMENTÉ
+      try {
+        await GoogleSignin.signOut();
+      } catch (e) {
+        // pas grave si l'utilisateur n'était pas connecté via Google
+      }
       await SecureStore.deleteItemAsync(TOKEN_KEY);
       await SecureStore.deleteItemAsync(USER_INFO_KEY);
     } catch (e) {
@@ -240,64 +244,71 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // ===== CONNEXION GOOGLE ===== COMMENTÉ
-  // const signInWithGoogle = useCallback(async () => {
-  //   console.log("AuthContext: Démarrage connexion Google...");
-  //   setIsGoogleSigningIn(true);
-  //   await wakeUpBackend();
-  //   try {
-  //     await GoogleSignin.hasPlayServices();
-  //     const response = await GoogleSignin.signIn();
-  //     const idToken = response?.data?.idToken;
-  //     const userGoogle = response?.data?.user;
-  //     if (!idToken) {
-  //       throw new Error("Aucun idToken reçu de Google");
-  //     }
-  //     if (!userGoogle?.email) {
-  //       throw new Error("Aucune information utilisateur reçue");
-  //     }
-  //     console.log("AuthContext: Google user:", userGoogle.email);
-  //     const backendResponse = await fetch(`${API_BASE_URL}/auth/google`, {
-  //       method: 'POST',
-  //       headers: { 'Content-Type': 'application/json' },
-  //       body: JSON.stringify({
-  //         googleId: idToken,
-  //         email: userGoogle.email,
-  //         name: userGoogle.name,
-  //         picture: userGoogle.photo,
-  //       }),
-  //     });
-  //     const responseText = await backendResponse.text();
-  //     if (responseText.trim().startsWith('<')) {
-  //       console.error("AuthContext: Réponse HTML reçue au lieu de JSON");
-  //       throw new Error("Le serveur répond avec une erreur. Veuillez réessayer.");
-  //     }
-  //     const data = JSON.parse(responseText);
-  //     if (backendResponse.ok) {
-  //       await SecureStore.setItemAsync(TOKEN_KEY, data.token);
-  //       setUserToken(data.token);
-  //       const userData: User = {
-  //         id: data.user.id,
-  //         name: data.user.name,
-  //         email: data.user.email,
-  //         role: data.user.role || 'customer',
-  //         profileImageFromAuthContext: data.user.picture || userGoogle.photo,
-  //       };
-  //       await SecureStore.setItemAsync(USER_INFO_KEY, JSON.stringify(userData));
-  //       setUser(userData);
-  //       setIsGoogleSigningIn(false);
-  //       Alert.alert('Succès', 'Connecté avec Google !');
-  //     } else {
-  //       throw new Error(data.message || 'Erreur connexion Google');
-  //     }
-  //   } catch (error: any) {
-  //     console.error('AuthContext: Erreur:', error);
-  //     setIsGoogleSigningIn(false);
-  //     if (error.code !== 'SIGN_IN_CANCELLED') {
-  //       Alert.alert('Erreur', error.message || 'Connexion Google impossible');
-  //     }
-  //   }
-  // }, [wakeUpBackend]);
+  // ===== CONNEXION GOOGLE =====
+  const signInWithGoogle = useCallback(async () => {
+    console.log("AuthContext: Démarrage connexion Google...");
+    setIsGoogleSigningIn(true);
+    await wakeUpBackend();
+    try {
+      await GoogleSignin.hasPlayServices();
+      const response = await GoogleSignin.signIn();
+      const idToken = response?.data?.idToken;
+      const userGoogle = response?.data?.user;
+
+      if (!idToken) {
+        throw new Error("Aucun idToken reçu de Google");
+      }
+      if (!userGoogle?.email) {
+        throw new Error("Aucune information utilisateur reçue");
+      }
+
+      console.log("AuthContext: Google user:", userGoogle.email);
+
+      const backendResponse = await fetch(`${API_BASE_URL}/auth/google`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          googleId: idToken,
+          email: userGoogle.email,
+          name: userGoogle.name,
+          picture: userGoogle.photo,
+        }),
+      });
+
+      const responseText = await backendResponse.text();
+      if (responseText.trim().startsWith('<')) {
+        console.error("AuthContext: Réponse HTML reçue au lieu de JSON");
+        throw new Error("Le serveur répond avec une erreur. Veuillez réessayer.");
+      }
+
+      const data = JSON.parse(responseText);
+
+      if (backendResponse.ok) {
+        await SecureStore.setItemAsync(TOKEN_KEY, data.token);
+        setUserToken(data.token);
+
+        const userData: User = {
+          id: data.user.id,
+          name: data.user.name,
+          email: data.user.email,
+          role: data.user.role || 'customer',
+          profileImageFromAuthContext: data.user.picture || userGoogle.photo,
+        };
+
+        await SecureStore.setItemAsync(USER_INFO_KEY, JSON.stringify(userData));
+        setUser(userData);
+        setIsGoogleSigningIn(false);
+      } else {
+        throw new Error(data.message || 'Erreur connexion Google');
+      }
+    } catch (error: any) {
+      console.error('AuthContext: Erreur:', error);
+      setIsGoogleSigningIn(false);
+      if (error.code !== 'SIGN_IN_CANCELLED') {
+        Alert.alert('Erreur', error.message || 'Connexion Google impossible');
+      }
+    }
+  }, [wakeUpBackend]);
 
   const setColorSchemePreferenceInternal = async (scheme: AppColorSchemePreference) => {
     try {
@@ -316,7 +327,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const authContextValue: AuthContextType = {
     signIn,
     signOut,
-    // signInWithGoogle, // COMMENTÉ
+    signInWithGoogle,
     user,
     userToken,
     isLoading: isAuthDataLoading || isThemePreferenceLoading,

@@ -31,7 +31,20 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
+.env.local
 .env*.local
 
 # typescript
 *.tsbuildinfo
+
+# ✅ FIREBASE - Service Account (backend uniquement, JAMAIS ici)
+firebase-service-account.json
+
+# ⚠️ google-services.json : NE PAS IGNORER pour EAS Build
+# (mais on le mettra dans un secret EAS plus tard si nécessaire)
+
+# Native
+android/
+ios/
+*.jks

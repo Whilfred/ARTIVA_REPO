@@ -4,7 +4,7 @@ import 'dotenv/config';
 export default {
   name: "Artiva",
   slug: "artiva",
-  version: "1.5.9",
+  version: "1.6.3",
   sdkVersion: "57.0.0",
   platforms: ["ios", "android", "web"],
   orientation: "portrait",
@@ -17,9 +17,13 @@ export default {
     backgroundColor: "#ffffff"
   },
   ios: {
-    // Plus de NSPhotoLibraryAddUsageDescription : le QR Code passe par la
-    // feuille de partage du systeme, l'app ne touche plus a la photothèque.
-    supportsTablet: true
+    supportsTablet: true,
+    // ✅ AJOUT pour les notifications
+    bundleIdentifier: "com.fathanemarcos.artiva",
+    googleServicesFile: "./GoogleService-Info.plist", // (si vous ciblez iOS)
+    infoPlist: {
+      UIBackgroundModes: ["remote-notification"]
+    }
   },
   android: {
     adaptiveIcon: {
@@ -28,10 +32,16 @@ export default {
     },
     edgeToEdgeEnabled: true,
     permissions: [
-      "CAMERA"
+      "CAMERA",
+      // ✅ AJOUT pour les notifications
+      "NOTIFICATIONS",
+      "RECEIVE_BOOT_COMPLETED",
+      "VIBRATE"
     ],
     package: "com.fathanemarcos.artiva",
-    versionCode: 73
+    versionCode: 76,
+    // ✅ AJOUT pour Firebase
+    googleServicesFile: "./google-services.json"
   },
   web: {
     bundler: "metro",
@@ -48,7 +58,28 @@ export default {
     "expo-status-bar",
     "expo-web-browser",
     "expo-video",
-    "expo-sharing"
+    "expo-sharing",
+    [
+      "expo-notifications",
+      {
+        icon: "./assets/images/Artiva_icon.png",
+        color: "#4CAF50",
+        sounds: []
+      }
+    ],
+    [
+      "expo-build-properties",
+      {
+        android: {
+          compileSdkVersion: 34,
+          targetSdkVersion: 34,
+          buildToolsVersion: "34.0.0"
+        },
+        ios: {
+          deploymentTarget: "13.4"
+        }
+      }
+    ]
   ],
   experiments: {
     typedRoutes: true

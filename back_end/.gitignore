@@ -37,3 +37,11 @@ yarn-error.*
 *.tsbuildinfo
 
 .env
+
+# Firebase Service Account (⚠️ NE JAMAIS COMMITER)
+config/firebase-service-account.json
+firebase-service-account.json
+
+# Fichiers de configuration Firebase
+google-services.json
+GoogleService-Info.plist
