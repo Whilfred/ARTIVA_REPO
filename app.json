@@ -1,5 +1,15 @@
 {
   "android": {
     "package": "com.fathanemarcos.e_artiva"
-  }
+  },
+  "plugins": [
+    [
+      "expo-build-properties",
+      {
+        "android": {
+          "compileSdkVersion": 36
+        }
+      }
+    ]
+  ]
 }

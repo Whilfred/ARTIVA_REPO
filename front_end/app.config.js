@@ -4,7 +4,7 @@ import 'dotenv/config';
 export default {
   name: "Artiva",
   slug: "artiva",
-  version: "1.6.3",
+  version: "1.6.5",
   sdkVersion: "57.0.0",
   platforms: ["ios", "android", "web"],
   orientation: "portrait",
@@ -18,9 +18,9 @@ export default {
   },
   ios: {
     supportsTablet: true,
-    // ✅ AJOUT pour les notifications
     bundleIdentifier: "com.fathanemarcos.artiva",
-    googleServicesFile: "./GoogleService-Info.plist", // (si vous ciblez iOS)
+    // ⚠️ Commenté : pas de GoogleService-Info.plist pour l'instant (iOS)
+    // googleServicesFile: "./GoogleService-Info.plist",
     infoPlist: {
       UIBackgroundModes: ["remote-notification"]
     }
@@ -33,14 +33,12 @@ export default {
     edgeToEdgeEnabled: true,
     permissions: [
       "CAMERA",
-      // ✅ AJOUT pour les notifications
       "NOTIFICATIONS",
       "RECEIVE_BOOT_COMPLETED",
       "VIBRATE"
     ],
     package: "com.fathanemarcos.artiva",
-    versionCode: 76,
-    // ✅ AJOUT pour Firebase
+    versionCode: 78,
     googleServicesFile: "./google-services.json"
   },
   web: {
@@ -67,19 +65,19 @@ export default {
         sounds: []
       }
     ],
-    [
-      "expo-build-properties",
-      {
-        android: {
-          compileSdkVersion: 34,
-          targetSdkVersion: 34,
-          buildToolsVersion: "34.0.0"
-        },
-        ios: {
-          deploymentTarget: "13.4"
-        }
-      }
-    ]
+[
+  "expo-build-properties",
+  {
+    "android": {
+      "compileSdkVersion": 36,
+      "targetSdkVersion": 35,
+      "buildToolsVersion": "36.0.0"
+    },
+    "ios": {
+      "deploymentTarget": "16.4"
+    }
+  }
+]
   ],
   experiments: {
     typedRoutes: true
