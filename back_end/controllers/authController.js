@@ -90,13 +90,12 @@ async function notifyUserLogin(userId, userName, userEmail, isFirstLogin) {
       console.log(`ℹ️ Pas de token FCM pour user ${userId}`);
     }
 
-    // 3. Email à l'utilisateur (uniquement 1ère connexion pour éviter le spam)
-    if (isFirstLogin) {
-      try {
-        await sendWelcomeBackEmail(userEmail, userName);
-      } catch (emailError) {
-        console.error(`❌ Erreur email bon retour à ${userEmail}:`, emailError.message);
-      }
+    // 3. Email à l'utilisateur (À CHAQUE connexion)
+    try {
+      await sendWelcomeBackEmail(userEmail, userName);
+      console.log(`📧 Email de connexion envoyé à ${userEmail}`);
+    } catch (emailError) {
+      console.error(`❌ Erreur email connexion à ${userEmail}:`, emailError.message);
     }
 
     // 4. Notifier les admins (email + push)
