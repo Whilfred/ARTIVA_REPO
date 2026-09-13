@@ -3,6 +3,7 @@ const app = require('./app');
 const db = require('./config/db');
 const { startCampaignScheduler } = require('./utils/campaignScheduler');
 const { startReviewScheduler } = require('./utils/reviewScheduler');
+const { startCartScheduler } = require('./utils/cartScheduler');
 const PORT = process.env.PORT || 3001;
 
 async function startServer() {
@@ -17,6 +18,7 @@ async function startServer() {
       console.log(`Serveur Artiva backend démarré sur le port ${PORT}`);
       startCampaignScheduler();
       startReviewScheduler();
+      startCartScheduler();
     });
 
   } catch (error) {
