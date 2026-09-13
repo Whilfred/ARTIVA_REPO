@@ -1,15 +1,6 @@
-// ARTIVA/back_end/controllers/campaignController.js
-//
-// Campagnes email : composition (admin), résolution des destinataires,
-// et envoi (immédiat ou programmé).
-//
-// Règle : les destinataires sont résolus et figés (snapshot dans
-// email_campaign_recipients) au moment de l'ENVOI, pas à la création.
-// Une campagne programmée pour dans 3 jours doit cibler les utilisateurs
-// tels qu'ils sont dans 3 jours, pas tels qu'ils étaient à la création.
-
 const db = require('../config/db');
 const { sendCampaignEmail } = require('../utils/sendEmail.js');
+const { sendMulticastNotification } = require('../services/fcmService');
 
 // -----------------------------------------------------------------------------
 // Résolution des destinataires à partir du ciblage choisi
@@ -287,25 +278,25 @@ async function executeCampaignSend(campaignId) {
 
   const destinataires = await resolveTargetUsers(db, campaign);
 
-if (destinataires.length === 0) {
-  await db.query(
-    `
-    UPDATE email_campaigns
-    SET
-      status = 'failed',
-      sent_at = NULL,
-      updated_at = CURRENT_TIMESTAMP
-    WHERE id = $1
-    `,
-    [campaignId]
-  );
+  if (destinataires.length === 0) {
+    await db.query(
+      `
+      UPDATE email_campaigns
+      SET
+        status = 'failed',
+        sent_at = NULL,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+      `,
+      [campaignId]
+    );
 
-  console.log(
-    `[Campaign ${campaignId}] Aucun destinataire trouvé. Campagne marquée comme échouée.`
-  );
+    console.log(
+      `[Campaign ${campaignId}] Aucun destinataire trouvé. Campagne marquée comme échouée.`
+    );
 
-  return;
-}
+    return;
+  }
   // Snapshot des destinataires : permet de suivre qui a reçu quoi, même si
   // le ciblage (ex: filtre) change de résultat après coup.
   for (const u of destinataires) {
@@ -317,11 +308,62 @@ if (destinataires.length === 0) {
   }
 
   const { rows: pendingRecipients } = await db.query(
-    `SELECT id, email, name FROM email_campaign_recipients WHERE campaign_id = $1 AND status = 'pending'`,
+    `SELECT id, user_id, email, name FROM email_campaign_recipients 
+     WHERE campaign_id = $1 AND status = 'pending'`,
     [campaignId]
   );
 
   console.log(`[Campaign ${campaignId}] Envoi à ${pendingRecipients.length} destinataire(s)...`);
+
+  // 📢 NOUVEAU : Notification PUSH à tous les destinataires
+  try {
+    // Récupérer les tokens FCM des destinataires
+    const userIds = pendingRecipients.map(r => r.user_id).filter(Boolean);
+
+    if (userIds.length > 0) {
+      const tokenResult = await db.query(
+        `SELECT fcm_token FROM users 
+         WHERE id = ANY($1::int[]) 
+         AND fcm_token IS NOT NULL 
+         AND is_active = true`,
+        [userIds]
+      );
+
+      const tokens = tokenResult.rows.map(r => r.fcm_token);
+
+      if (tokens.length > 0) {
+        // Tronquer le sujet pour la push (max ~60 caractères pour l'affichage)
+        const pushTitle = campaign.subject.length > 60
+          ? campaign.subject.substring(0, 57) + '...'
+          : campaign.subject;
+
+        // Extraire un aperçu du HTML pour le corps de la push
+        const previewText = (campaign.body_html || '')
+          .replace(/<[^>]+>/g, ' ')     // Retirer les balises HTML
+          .replace(/&nbsp;/g, ' ')       // Remplacer &nbsp;
+          .replace(/\s+/g, ' ')          // Normaliser les espaces
+          .trim()
+          .substring(0, 150);
+
+        const pushResult = await sendMulticastNotification(tokens, {
+          title: `📢 ${pushTitle}`,
+          body: previewText || 'Découvrez notre nouvelle offre !',
+          data: {
+            screen: 'promotions',
+            campaignId: String(campaignId),
+          },
+        });
+
+        console.log(
+          `📢 Push campagne ${campaignId} envoyée : ${pushResult.successCount}/${tokens.length} succès`
+        );
+      } else {
+        console.log(`ℹ️ Aucun token FCM pour les destinataires de la campagne ${campaignId}`);
+      }
+    }
+  } catch (notifError) {
+    console.error(`❌ Erreur push campagne ${campaignId}:`, notifError.message);
+  }
 
   let echoues = 0;
   for (const recipient of pendingRecipients) {
