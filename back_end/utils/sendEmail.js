@@ -872,6 +872,95 @@ const sendCampaignEmail = async (to, { subject, html }) => {
   );
 };
 
+
+// =============================================================================
+// EMAIL UTILISATEUR : Bon retour (connexions suivantes)
+// =============================================================================
+
+const sendWelcomeBackEmail = async (to, name) => {
+  const htmlContent = carteEmail({
+    titre: "👋 Content de vous revoir !",
+    couleur: "#4CAF50",
+    corps: `
+      <p style="font-size:16px;">
+        Bonjour ${name || "Cher client"},
+      </p>
+      <p style="font-size:15px;">
+        Content de vous revoir sur Artiva ! 🌟
+      </p>
+      <p style="font-size:15px;">
+        Découvrez nos dernières nouveautés et profitez de nos offres du moment.
+      </p>
+      <div style="text-align:center; margin:20px 0;">
+        <a href="https://artiva.app/catalog" style="
+          background:#4CAF50;
+          color:white;
+          padding:12px 30px;
+          text-decoration:none;
+          border-radius:5px;
+          font-weight:bold;
+          display:inline-block;
+        ">
+          🛒 Voir le catalogue
+        </a>
+      </div>
+      <p style="font-size:14px; color:#666; text-align:center;">
+        À bientôt sur Artiva ! ✨
+      </p>
+    `,
+  });
+
+  await sendMailWithLog(
+    {
+      fromName: "Artiva 👋",
+      fromEmail: "artiva.app@gmail.com",
+      to,
+      subject: "👋 Content de vous revoir sur Artiva !",
+      html: htmlContent,
+    },
+    "Welcome-Back"
+  );
+};
+
+// =============================================================================
+// EMAIL ADMIN : Nouvelle connexion utilisateur
+// =============================================================================
+
+const sendAdminUserLoginEmail = async (adminEmail, { name, email, isFirstLogin, date }) => {
+  const htmlContent = carteEmail({
+    titre: isFirstLogin ? "🎉 Nouvel utilisateur inscrit !" : "👤 Utilisateur connecté",
+    couleur: isFirstLogin ? "#4CAF50" : "#2196F3",
+    corps: `
+      <p style="font-size:16px;">
+        ${isFirstLogin ? "Un nouvel utilisateur vient de s'inscrire :" : "Un utilisateur vient de se connecter :"}
+      </p>
+      <div style="background:#f0f0f0; padding:15px; border-radius:8px; margin:15px 0;">
+        <p style="margin:5px 0;"><b>Nom :</b> ${name || "Non renseigné"}</p>
+        <p style="margin:5px 0;"><b>Email :</b> ${email}</p>
+        <p style="margin:5px 0;"><b>Date :</b> ${new Date(date).toLocaleString("fr-FR")}</p>
+        <p style="margin:5px 0;"><b>Type :</b> ${isFirstLogin ? "🎉 Première connexion" : "👤 Connexion habituelle"}</p>
+      </div>
+      <p style="font-size:14px; color:#666;">
+        Connectez-vous au panel admin pour plus de détails.
+      </p>
+    `,
+    pied: "Notification automatique Artiva",
+  });
+
+  await sendMailWithLog(
+    {
+      fromName: "Artiva 👤",
+      fromEmail: "artiva.app@gmail.com",
+      to: adminEmail,
+      subject: isFirstLogin
+        ? `🎉 Nouvel utilisateur : ${name}`
+        : `👤 Connexion : ${name}`,
+      html: htmlContent,
+    },
+    "Admin-User-Login"
+  );
+};
+
 // =============================================================================
 // EXPORTS
 // =============================================================================
@@ -886,4 +975,6 @@ module.exports = {
   sendCampaignEmail,
   sendWelcomeEmail,
   sendWouhouGiftEmail,
+  sendWelcomeBackEmail,
+  sendAdminUserLoginEmail,
 };

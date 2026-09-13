@@ -2,12 +2,17 @@
 const db = require("../config/db.js");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+
 const { 
   sendLoginCode, 
   sendResetPasswordCode,
   sendWelcomeEmail,
-  sendWouhouGiftEmail 
+  sendWouhouGiftEmail,
+  sendWelcomeBackEmail,
+  sendAdminUserLoginEmail
 } = require("../utils/sendEmail.js");
+const { sendPushNotification } = require("../services/fcmService");
+
 require('dotenv').config();
 
 // ==========================
@@ -53,6 +58,91 @@ const loginAdmin = async (req, res) => {
 // ==========================
 function generateCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+// ==========================
+// NOTIFIER CONNEXION UTILISATEUR (admin + user)
+// ==========================
+async function notifyUserLogin(userId, userName, userEmail, isFirstLogin) {
+  try {
+    // 1. Récupérer le token FCM de l'utilisateur
+    const userResult = await db.query(
+      'SELECT fcm_token FROM users WHERE id = $1',
+      [userId]
+    );
+    const userFcmToken = userResult.rows[0]?.fcm_token;
+
+    // 2. Push à l'utilisateur
+    if (userFcmToken) {
+      try {
+        await sendPushNotification(userFcmToken, {
+          title: isFirstLogin ? '🎉 Bienvenue sur Artiva !' : '👋 Content de vous revoir !',
+          body: isFirstLogin
+            ? `Ravi de vous accueillir, ${userName} ! Découvrez notre catalogue.`
+            : `Bon retour, ${userName} !`,
+          data: { screen: 'home' },
+        });
+        console.log(`📲 Push ${isFirstLogin ? 'bienvenue' : 'bon retour'} envoyée à ${userEmail}`);
+      } catch (pushError) {
+        console.error(`❌ Erreur push user ${userId}:`, pushError.message);
+      }
+    } else {
+      console.log(`ℹ️ Pas de token FCM pour user ${userId}`);
+    }
+
+    // 3. Email à l'utilisateur (uniquement 1ère connexion pour éviter le spam)
+    if (isFirstLogin) {
+      try {
+        await sendWelcomeBackEmail(userEmail, userName);
+      } catch (emailError) {
+        console.error(`❌ Erreur email bon retour à ${userEmail}:`, emailError.message);
+      }
+    }
+
+    // 4. Notifier les admins (email + push)
+    const admins = await db.query(
+      'SELECT id, email, fcm_token FROM admin WHERE email IS NOT NULL'
+    );
+
+    for (const admin of admins.rows) {
+      // Email admin
+      if (admin.email) {
+        try {
+          await sendAdminUserLoginEmail(admin.email, {
+            name: userName,
+            email: userEmail,
+            isFirstLogin,
+            date: new Date().toISOString(),
+          });
+        } catch (emailError) {
+          console.error(`❌ Erreur email admin ${admin.email}:`, emailError.message);
+        }
+      }
+
+      // Push admin
+      if (admin.fcm_token) {
+        try {
+          await sendPushNotification(admin.fcm_token, {
+            title: isFirstLogin ? '🎉 Nouvel utilisateur inscrit !' : '👋 Utilisateur connecté',
+            body: `${userName} (${userEmail}) vient de se connecter`,
+            data: { screen: 'admin' },
+          });
+          console.log(`📲 Push admin envoyée à ${admin.email}`);
+        } catch (pushError) {
+          console.error(`❌ Erreur push admin ${admin.email}:`, pushError.message);
+        }
+      }
+    }
+
+    // 5. Mettre à jour last_login_at
+    await db.query(
+      'UPDATE users SET last_login_at = NOW() WHERE id = $1',
+      [userId]
+    );
+
+  } catch (error) {
+    console.error('❌ Erreur notifyUserLogin:', error.message);
+  }
 }
 
 // ==========================
@@ -216,7 +306,10 @@ const verifyLoginCode = async (req, res) => {
     return res.status(400).json({ message: "Email et code requis" });
 
   try {
-    const userResult = await db.query("SELECT id, email, name, role FROM users WHERE email=$1", [email]);
+    const userResult = await db.query(
+      "SELECT id, email, name, role, last_login_at FROM users WHERE email=$1",
+      [email]
+    );
     if (userResult.rows.length === 0)
       return res.status(404).json({ message: "Utilisateur introuvable" });
 
@@ -240,7 +333,18 @@ const verifyLoginCode = async (req, res) => {
       { expiresIn: "7d" }
     );
 
+    // ✅ Détecter la 1ère connexion
+    const isFirstLogin = !user.last_login_at;
+
+    // Répondre IMMÉDIATEMENT au client (ne pas bloquer)
     res.json({ token, user, message: "Connexion validée avec succès" });
+
+    // ✅ En arrière-plan : notifier (user + admin)
+    setImmediate(() => {
+      notifyUserLogin(user.id, user.name, user.email, isFirstLogin)
+        .catch((err) => console.error("Erreur notifyUserLogin:", err));
+    });
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Erreur serveur" });
@@ -292,22 +396,25 @@ const googleAuth = async (req, res) => {
 
   try {
     let userResult = await db.query(
-      `SELECT id, name, email, role, picture, google_id, is_active, created_at 
+      `SELECT id, name, email, role, picture, google_id, is_active, created_at, last_login_at 
        FROM users 
        WHERE email = $1 OR google_id = $2`,
       [email, googleId]
     );
 
     let user;
+    let isFirstLogin = false;
 
     if (userResult.rows.length === 0) {
+      // ⚠️ NOUVEL UTILISATEUR GOOGLE
       const insertResult = await db.query(
         `INSERT INTO users (name, email, google_id, picture, is_email_verified, role, is_active, created_at)
          VALUES ($1, $2, $3, $4, true, 'customer', true, NOW())
-         RETURNING id, name, email, role, picture, google_id, is_active, created_at`,
+         RETURNING id, name, email, role, picture, google_id, is_active, created_at, last_login_at`,
         [name || email.split('@')[0], email, googleId, picture || null]
       );
       user = insertResult.rows[0];
+      isFirstLogin = true;
       console.log(`[Google Auth] Nouvel utilisateur créé: ${email}`);
 
       // ✅ Envoyer les emails de bienvenue et cadeau pour les inscriptions Google
@@ -322,6 +429,9 @@ const googleAuth = async (req, res) => {
       }
 
     } else {
+      // ⚠️ UTILISATEUR EXISTANT
+      isFirstLogin = !userResult.rows[0].last_login_at;
+
       const updateResult = await db.query(
         `UPDATE users 
          SET 
@@ -329,11 +439,11 @@ const googleAuth = async (req, res) => {
            picture = COALESCE($2, picture),
            updated_at = NOW()
          WHERE id = $3
-         RETURNING id, name, email, role, picture, google_id, is_active, created_at`,
+         RETURNING id, name, email, role, picture, google_id, is_active, created_at, last_login_at`,
         [googleId, picture || null, userResult.rows[0].id]
       );
       user = updateResult.rows[0];
-      console.log(`[Google Auth] Utilisateur existant mis à jour: ${email}`);
+      console.log(`[Google Auth] Utilisateur existant mis à jour: ${email} (1ère connexion: ${isFirstLogin})`);
     }
 
     const token = jwt.sign(
@@ -342,6 +452,7 @@ const googleAuth = async (req, res) => {
       { expiresIn: "7d" }
     );
 
+    // ✅ Répondre IMMÉDIATEMENT
     res.json({
       success: true,
       token,
@@ -353,6 +464,12 @@ const googleAuth = async (req, res) => {
         picture: user.picture || null,
         is_active: user.is_active
       }
+    });
+
+    // ✅ En arrière-plan : notifier (user + admin)
+    setImmediate(() => {
+      notifyUserLogin(user.id, user.name, user.email, isFirstLogin)
+        .catch((err) => console.error("Erreur notifyUserLogin (Google):", err));
     });
 
   } catch (error) {
