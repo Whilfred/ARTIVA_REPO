@@ -1,6 +1,7 @@
 // ARTIVA/back_end/controllers/productController.js
 const db = require("../config/db");
 const wishlistController = require("./wishlistController");
+const { notifyPriceDrop } = require("../services/notificationPriceService");
 
 // --- Créer un nouveau produit (Admin) ---
 exports.createProduct = async (req, res) => {
@@ -310,18 +311,25 @@ exports.updateProduct = async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // Stock AVANT modification : c'est la seule façon de savoir si on vient
-    // de repasser de 0 (ou moins) à un stock positif, et donc s'il faut
-    // prévenir la wishlist. Lu ici, dans la transaction, avant l'UPDATE.
     let oldStock = null;
-    if (stock !== undefined) {
-      const oldStockResult = await client.query('SELECT stock FROM products WHERE id = $1', [id]);
-      if (oldStockResult.rows.length === 0) {
+    let oldPrice = null;
+
+    if (stock !== undefined || price !== undefined) {
+      const oldValuesResult = await client.query(
+        'SELECT stock, price FROM products WHERE id = $1',
+        [id]
+      );
+      if (oldValuesResult.rows.length === 0) {
         await client.query('ROLLBACK');
         client.release();
         return res.status(404).json({ message: 'Produit non trouvé.' });
       }
-      oldStock = parseInt(oldStockResult.rows[0].stock, 10);
+      if (stock !== undefined) {
+        oldStock = parseInt(oldValuesResult.rows[0].stock, 10);
+      }
+      if (price !== undefined) {
+        oldPrice = parseFloat(oldValuesResult.rows[0].price);
+      }
     }
 
     let updatedProduct;
@@ -408,13 +416,15 @@ exports.updateProduct = async (req, res) => {
 
     res.status(200).json({ message: 'Produit mis à jour avec succès!', product: finalProduct });
 
-    // NOUVEAU : retour en stock — HORS transaction, non bloquant.
-    // Déclenché uniquement si on passe d'un stock nul/négatif à un stock
-    // positif ; un simple réajustement (10 -> 15) ne doit pas spammer la
-    // wishlist.
     if (oldStock !== null && oldStock <= 0 && parsedStock > 0) {
       wishlistController.notifyWishlistUsersOnRestock(id).catch((err) => {
         console.error(`Erreur notification restock produit ${id}:`, err);
+      });
+    }
+    if (oldPrice !== null && updatedProduct && updatedProduct.price < oldPrice) {
+      const newPrice = parseFloat(updatedProduct.price);
+      notifyPriceDrop(id, oldPrice, newPrice, updatedProduct.name).catch((err) => {
+        console.error(`Erreur notification baisse de prix produit ${id}:`, err);
       });
     }
 

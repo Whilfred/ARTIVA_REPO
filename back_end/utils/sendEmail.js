@@ -962,6 +962,77 @@ const sendAdminUserLoginEmail = async (adminEmail, { name, email, isFirstLogin, 
 };
 
 // =============================================================================
+// EMAIL : Baisse de prix (wishlist ou panier)
+// =============================================================================
+
+const sendPriceDropEmail = async (to, name, {
+  productName,
+  oldPrice,
+  newPrice,
+  pourcentage,
+  source, // 'wishlist' ou 'cart'
+}) => {
+  const fcfa = (v) => `${Number(v || 0).toLocaleString("fr-FR")} FCFA`;
+
+  const sourceTexte = source === 'cart'
+    ? 'présent dans votre panier'
+    : 'de votre liste de souhaits';
+
+  const htmlContent = carteEmail({
+    titre: "💰 Baisse de prix !",
+    couleur: "#FF6B00",
+    corps: `
+      <p style="font-size:16px;">
+        Bonjour ${name || "Cher client"},
+      </p>
+      <p style="font-size:15px;">
+        Bonne nouvelle ! Le produit <b>${productName}</b> ${sourceTexte} a baissé de prix :
+      </p>
+      <div style="text-align:center; margin:25px 0; padding:15px; background:#FFF3E0; border-radius:8px; border:2px dashed #FF6B00;">
+        <p style="font-size:14px; color:#666; margin:0;">Nouveau prix</p>
+        <p style="font-size:32px; font-weight:bold; color:#FF6B00; margin:5px 0;">
+          ${fcfa(newPrice)}
+        </p>
+        <p style="font-size:14px; color:#999; margin:5px 0 0 0;">
+          <s>Ancien prix : ${fcfa(oldPrice)}</s>
+        </p>
+        <p style="font-size:16px; font-weight:bold; color:#4CAF50; margin:5px 0 0 0;">
+          🎉 -${pourcentage}% !
+        </p>
+      </div>
+      <div style="text-align:center; margin:20px 0;">
+        <a href="https://artiva.app/catalog" style="
+          background:#FF6B00;
+          color:white;
+          padding:14px 35px;
+          text-decoration:none;
+          border-radius:5px;
+          font-weight:bold;
+          display:inline-block;
+        ">
+          🛍️ En profiter maintenant
+        </a>
+      </div>
+      <p style="font-size:13px; color:#888; text-align:center; margin-top:15px;">
+        💡 Offre valable dans la limite des stocks disponibles.
+      </p>
+    `,
+    pied: "L'équipe Artiva — Bon plan du jour",
+  });
+
+  await sendMailWithLog(
+    {
+      fromName: "Artiva 💰",
+      fromEmail: "artiva.app@gmail.com",
+      to,
+      subject: `💰 Baisse de prix : ${productName} (-${pourcentage}%)`,
+      html: htmlContent,
+    },
+    "Price-Drop"
+  );
+};
+
+// =============================================================================
 // EXPORTS
 // =============================================================================
 
@@ -977,4 +1048,5 @@ module.exports = {
   sendWouhouGiftEmail,
   sendWelcomeBackEmail,
   sendAdminUserLoginEmail,
+  sendPriceDropEmail,
 };
