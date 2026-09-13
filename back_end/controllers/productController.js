@@ -285,8 +285,11 @@ exports.updateProduct = async (req, res) => {
 
   if (name !== undefined) { fields.push(`name = $${paramIndex++}`); values.push(name); }
   if (description !== undefined) { fields.push(`description = $${paramIndex++}`); values.push(description || null); }
+
+  // 🐛 CORRECTION : parsedPrice déclaré à l'extérieur pour être utilisé après le COMMIT
+  let parsedPrice;
   if (price !== undefined) {
-    const parsedPrice = parseFloat(price);
+    parsedPrice = parseFloat(price);
     if (isNaN(parsedPrice) || parsedPrice < 0) return res.status(400).json({ message: 'Prix invalide.' });
     fields.push(`price = $${paramIndex++}`); values.push(parsedPrice);
   }
@@ -416,14 +419,20 @@ exports.updateProduct = async (req, res) => {
 
     res.status(200).json({ message: 'Produit mis à jour avec succès!', product: finalProduct });
 
+    // 🐛 DEBUG : logs pour comprendre
+    console.log(`🔍 DEBUG price drop check: oldPrice=${oldPrice} (${typeof oldPrice}), parsedPrice=${parsedPrice} (${typeof parsedPrice})`);
+
+    // Retour en stock
     if (oldStock !== null && oldStock <= 0 && parsedStock > 0) {
       wishlistController.notifyWishlistUsersOnRestock(id).catch((err) => {
         console.error(`Erreur notification restock produit ${id}:`, err);
       });
     }
-    if (oldPrice !== null && updatedProduct && updatedProduct.price < oldPrice) {
-      const newPrice = parseFloat(updatedProduct.price);
-      notifyPriceDrop(id, oldPrice, newPrice, updatedProduct.name).catch((err) => {
+
+    // 🐛 CORRECTION : comparaison de nombres (parsedPrice au lieu de updatedProduct.price)
+    if (oldPrice !== null && parsedPrice !== undefined && parsedPrice < oldPrice) {
+      console.log(`💰 Baisse détectée : ${oldPrice} → ${parsedPrice}`);
+      notifyPriceDrop(id, oldPrice, parsedPrice, updatedProduct.name).catch((err) => {
         console.error(`Erreur notification baisse de prix produit ${id}:`, err);
       });
     }
