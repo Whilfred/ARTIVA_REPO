@@ -941,7 +941,7 @@ const sendAdminUserLoginEmail = async (adminEmail, { name, email, isFirstLogin, 
         <p style="margin:5px 0;"><b>Type :</b> ${isFirstLogin ? "🎉 Première connexion" : "👤 Connexion habituelle"}</p>
       </div>
       <p style="font-size:14px; color:#666;">
-        Connectez-vous au panel admin pour plus de détails.
+        Connecté(e).
       </p>
     `,
     pied: "Notification automatique Artiva",
