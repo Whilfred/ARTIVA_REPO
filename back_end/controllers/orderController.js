@@ -332,6 +332,26 @@ exports.createOrder = async (req, res) => {
       console.error('Erreur push commande:', notifError.message);
     }
 
+    // 🎁 NOUVEAU : Notification PUSH "bon d'achat utilisé"
+    if (appliedPromoCode && discountAmount > 0) {
+      try {
+        const tokenResult2 = await db.query(
+          'SELECT fcm_token FROM users WHERE id = $1 AND fcm_token IS NOT NULL',
+          [userId]
+        );
+        if (tokenResult2.rows.length > 0) {
+          await sendPushNotification(tokenResult2.rows[0].fcm_token, {
+            title: '🎁 Bon d\'achat utilisé !',
+            body: `Vous avez économisé ${discountAmount.toLocaleString('fr-FR')} FCFA avec le code ${appliedPromoCode}. Merci !`,
+            data: { screen: 'order', orderId: createdOrder.id },
+          });
+          console.log(`🎁 Push "bon utilisé" envoyée à user ${userId}`);
+        }
+      } catch (notifError) {
+        console.error('Erreur push bon utilisé:', notifError.message);
+      }
+    }
+
     res.status(201).json({
       message: "Commande créée avec succès !",
       order: createdOrder
@@ -617,7 +637,7 @@ exports.updateOrderStatusAdmin = async (req, res) => {
       console.log(`ℹ️ Aucun email configuré pour le statut: ${newStatus}`);
     }
 
-    // ✅ NOUVEAU : Notification PUSH "changement de statut"
+    // ✅ Notification PUSH "changement de statut"
     try {
       const tokenResult = await db.query(
         'SELECT fcm_token FROM users WHERE id = $1 AND fcm_token IS NOT NULL',
