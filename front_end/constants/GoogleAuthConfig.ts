@@ -1,14 +1,14 @@
 // front_end/constants/GoogleAuthConfig.ts
 
 export const googleConfig = {
-  // Web Client ID (backend)
-  webClientId: '140318387654-145f5amfrakiu9o511h49qflo016elga.apps.googleusercontent.com',
+  // Web Client ID (backend) — projet artiva-92796
+  webClientId: '238156643506-d2oh7p9ujnsd8q9un38bha8i8r5aptpj.apps.googleusercontent.com',
   
-  // Android Client ID (NOUVEAU - pour l'app production)
-  androidClientId: '140318387654-m352bk8ot7stp37pntftfftn845l8kno.apps.googleusercontent.com',
+  // Android Client ID — projet artiva-92796
+  androidClientId: '238156643506-gn16u0u60nr4vtv00drkk94u557vovp4.apps.googleusercontent.com',
   
   // Optionnel - pour développement Expo (peut être le même que web)
-  expoClientId: '140318387654-145f5amfrakiu9o511h49qflo016elga.apps.googleusercontent.com',
+  expoClientId: '238156643506-d2oh7p9ujnsd8q9un38bha8i8r5aptpj.apps.googleusercontent.com',
   
   // iOS (si tu déployes sur iOS plus tard)
   iosClientId: '',
