@@ -2,6 +2,7 @@
 const app = require('./app');
 const db = require('./config/db');
 const { startCampaignScheduler } = require('./utils/campaignScheduler');
+const { startReviewScheduler } = require('./utils/reviewScheduler');
 const PORT = process.env.PORT || 3001;
 
 async function startServer() {
@@ -14,7 +15,8 @@ async function startServer() {
 
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`Serveur Artiva backend démarré sur le port ${PORT}`);
-      startCampaignScheduler(); // <-- AJOUT : démarré seulement une fois le serveur bien lancé
+      startCampaignScheduler();
+      startReviewScheduler();
     });
 
   } catch (error) {

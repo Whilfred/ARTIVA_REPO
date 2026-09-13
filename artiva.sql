@@ -1148,3 +1148,23 @@ ALTER TABLE loyalty_ledger ADD CONSTRAINT loyalty_ledger_reason_check
 
 
 -- Fin du script
+
+
+
+------------------13-09-2026
+-- Table pour tracer les demandes d'avis envoyées
+CREATE TABLE IF NOT EXISTS review_requests (
+  id SERIAL PRIMARY KEY,
+  order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  sent_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(order_id)
+);
+
+-- Index pour accélérer
+CREATE INDEX IF NOT EXISTS idx_review_requests_order ON review_requests(order_id);
+
+-- Vérifier
+SELECT column_name, data_type 
+FROM information_schema.columns 
+WHERE table_name = 'review_requests';
