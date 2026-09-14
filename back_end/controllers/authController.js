@@ -12,6 +12,10 @@ const {
   sendAdminUserLoginEmail
 } = require("../utils/sendEmail.js");
 const { sendPushNotification } = require("../services/fcmService");
+// Le bon de bienvenue est cree par le module fidelite : c'est lui qui
+// l'ecrit dans promo_codes, seul endroit ou la validation au paiement ira
+// le chercher.
+const { creerBonusBienvenue } = require("./loyaltyController.js");
 
 require('dotenv').config();
 
@@ -239,11 +243,24 @@ const registerUser = async (req, res) => {
 
     const user = newUser.rows[0];
 
+    // Le bon doit exister en base AVANT d'etre annonce par email : sinon le
+    // client recoit un code que la validation au paiement ne trouvera pas.
+    // Un echec ici ne doit pas faire echouer l'inscription — l'ecran fidelite
+    // rattrapera la creation au premier passage.
+    let bonBienvenue = null;
+    try {
+      bonBienvenue = await creerBonusBienvenue(null, user.id);
+    } catch (bonError) {
+      console.error(`❌ Creation du bon de bienvenue echouee pour ${email}:`, bonError.message);
+    }
+
     // ✅ ENVOI DES DEUX EMAILS : BIENVENUE + CADEAU WOUHOU
     try {
       await Promise.all([
         sendWelcomeEmail(email, name),
-        sendWouhouGiftEmail(email, name)
+        bonBienvenue
+          ? sendWouhouGiftEmail(email, name, bonBienvenue.code, bonBienvenue.expires_at)
+          : Promise.resolve()
       ]);
       console.log(`✅ Emails de bienvenue et cadeau envoyés à ${email}`);
     } catch (emailError) {
@@ -416,11 +433,24 @@ const googleAuth = async (req, res) => {
       isFirstLogin = true;
       console.log(`[Google Auth] Nouvel utilisateur créé: ${email}`);
 
+      // Le bon doit exister en base AVANT d'etre annonce par email : sinon le
+      // client recoit un code que la validation au paiement ne trouvera pas.
+      // Un echec ici ne doit pas faire echouer l'inscription — l'ecran fidelite
+      // rattrapera la creation au premier passage.
+      let bonBienvenue = null;
+      try {
+        bonBienvenue = await creerBonusBienvenue(null, user.id);
+      } catch (bonError) {
+        console.error(`❌ Creation du bon de bienvenue echouee pour ${email}:`, bonError.message);
+      }
+
       // ✅ Envoyer les emails de bienvenue et cadeau pour les inscriptions Google
       try {
         await Promise.all([
           sendWelcomeEmail(email, user.name),
-          sendWouhouGiftEmail(email, user.name)
+          bonBienvenue
+            ? sendWouhouGiftEmail(email, user.name, bonBienvenue.code, bonBienvenue.expires_at)
+            : Promise.resolve()
         ]);
         console.log(`✅ Emails de bienvenue et cadeau envoyés à ${email} (Google)`);
       } catch (emailError) {

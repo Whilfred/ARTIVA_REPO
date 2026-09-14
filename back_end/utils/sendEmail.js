@@ -428,19 +428,18 @@ const sendWelcomeEmail = async (to, name) => {
 // EMAIL 2 : Wouhou + Bon d'achat 2000 FCFA
 // =============================================================================
 
-const sendWouhouGiftEmail = async (to, name) => {
-  const generatePromoCode = () => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let code = 'WELCOME-';
-    for (let i = 0; i < 6; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return code;
-  };
+const sendWouhouGiftEmail = async (to, name, promoCode, expiresAt) => {
+  // Le code n'est plus fabrique ici.
+  //
+  // Il l'etait avec Math.random(), sans jamais etre ecrit dans promo_codes : le
+  // client recevait un code que la validation au paiement ne trouvait pas, et
+  // la remise etait refusee. C'est desormais l'appelant qui cree le bon reel
+  // (creerBonusBienvenue) et transmet son code.
+  if (!promoCode) {
+    throw new Error("sendWouhouGiftEmail : code promo manquant, email non envoye");
+  }
 
-  const promoCode = generatePromoCode();
-  const expirationDate = new Date();
-  expirationDate.setDate(expirationDate.getDate() + 30);
+  const expirationDate = expiresAt ? new Date(expiresAt) : null;
 
   const htmlContent = carteEmail({
     titre: "🎁 WOUHOU ! Un bon d'achat de 2000 FCFA pour vous !",
@@ -460,9 +459,9 @@ const sendWouhouGiftEmail = async (to, name) => {
         <p style="font-size:32px; font-weight:bold; color:#FF6B00; margin:5px 0; letter-spacing:2px;">
           ${promoCode}
         </p>
-        <p style="font-size:12px; color:#999; margin:5px 0 0 0;">
+        ${expirationDate ? `<p style="font-size:12px; color:#999; margin:5px 0 0 0;">
           Valable jusqu'au ${expirationDate.toLocaleDateString("fr-FR")}
-        </p>
+        </p>` : ""}
       </div>
       <div style="text-align:center; margin:20px 0;">
         <a href="https://artiva.app/catalog" style="

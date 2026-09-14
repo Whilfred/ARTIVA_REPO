@@ -65,7 +65,7 @@ async function creerBonusBienvenue(client, userId) {
   
   // Vérifier si l'utilisateur a déjà un bonus de bienvenue
   const { rows: existing } = await currentClient.query(
-    `SELECT id, code FROM promo_codes 
+    `SELECT id, code, expires_at FROM promo_codes 
      WHERE user_id = $1 AND code LIKE 'BIENVENUE%'`,
     [userId]
   );
