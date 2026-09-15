@@ -73,20 +73,44 @@ exports.getUserCart = async (req, res) => {
 };
 
 // --- Ajouter/Mettre à jour un article dans le panier ---
+// ✅ MODIFIÉ : accepte quantity = 0 pour supprimer l'article
 exports.addItemToCart = async (req, res) => {
   const userId = req.user.id;
   const { productId, quantity } = req.body;
 
-  if (!productId || quantity === undefined || parseInt(quantity, 10) <= 0) {
-    return res.status(400).json({ message: 'ID produit et quantité positive sont requis.' });
+  if (!productId || quantity === undefined) {
+    return res.status(400).json({ message: 'ID produit et quantité requis.' });
   }
   const parsedQuantity = parseInt(quantity, 10);
+
+  if (isNaN(parsedQuantity)) {
+    return res.status(400).json({ message: 'Quantité invalide.' });
+  }
 
   const client = await db.pool.connect();
   try {
     await client.query('BEGIN');
 
     const cart = await getActiveCart(userId, client);
+
+    // ✅ NOUVEAU : Si quantity = 0, supprimer l'article
+    if (parsedQuantity === 0) {
+      const deleteResult = await client.query(
+        'DELETE FROM cart_items WHERE cart_id = $1 AND product_id = $2 RETURNING id',
+        [cart.id, productId]
+      );
+      await client.query('COMMIT');
+      return res.status(200).json({ 
+        message: 'Article supprimé du panier.',
+        deleted: deleteResult.rowCount > 0
+      });
+    }
+
+    if (parsedQuantity < 0) {
+      await client.query('ROLLBACK');
+      client.release();
+      return res.status(400).json({ message: 'Quantité invalide.' });
+    }
 
     const productResult = await client.query('SELECT stock, price, name FROM products WHERE id = $1 AND is_published = TRUE', [productId]);
     if (productResult.rows.length === 0) {

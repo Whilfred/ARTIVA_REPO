@@ -1,3 +1,4 @@
+// ARTIVA/front_end/context/CartContext.tsx
 import React, {
   createContext,
   useState,
@@ -5,167 +6,324 @@ import React, {
   useCallback,
   useContext,
   ReactNode,
+  useRef,
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { API_BASE_URL } from "../constants/Api";
+import * as SecureStore from "../constants/SecureStorage";
+import { useAuth } from "./AuthContext";
+
+// Clé du token dans SecureStore (doit correspondre à AuthContext)
+const TOKEN_KEY = "artiva-auth-token";
 
 // Interface pour un produit de base, tel qu'il vient d'une liste ou d'une page de détail.
-// Il n'a pas de notion de "quantité dans le panier".
 export interface BaseProductType {
   id: string;
   name: string;
-  price: string; // Gardé en string car il est déjà formaté (ex: "1500.00 FCFA")
+  price: string;
   imageUrl: string;
   stock?: number;
 }
 
-// Interface pour un article DANS le panier. Il étend le produit de base et y AJOUTE la quantité.
+// Interface pour un article DANS le panier.
 export interface CartItem extends BaseProductType {
   quantity: number;
+  cartItemId?: string; // ID du cart_item côté backend (si synchronisé)
 }
 
 // Interface définissant toutes les valeurs et fonctions fournies par notre contexte.
 interface CartContextProps {
   cartItems: CartItem[];
-  addToCart: (item: BaseProductType, quantity: number) => void;
-  updateQuantity: (itemId: string, newQuantity: number) => void;
-  removeFromCart: (itemId:string) => void;
-  clearCart: () => void;
+  addToCart: (item: BaseProductType, quantity: number) => Promise<void>;
+  updateQuantity: (itemId: string, newQuantity: number) => Promise<void>;
+  removeFromCart: (itemId: string) => Promise<void>;
+  clearCart: () => Promise<void>;
   getTotalPrice: () => number;
   getTotalItems: () => number;
   isLoadingCart: boolean;
+  isCartSynced: boolean; // true si le panier est synchronisé avec le backend
 }
 
-// Création du contexte avec une valeur par défaut.
-// Cela évite les erreurs si on essaie d'utiliser le contexte sans son Provider.
 const CartContext = createContext<CartContextProps>({
   cartItems: [],
-  addToCart: () => console.warn("addToCart function called outside of CartProvider"),
-  updateQuantity: () => console.warn("updateQuantity function called outside of CartProvider"),
-  removeFromCart: () => console.warn("removeFromCart function called outside of CartProvider"),
-  clearCart: () => console.warn("clearCart function called outside of CartProvider"),
+  addToCart: async () => console.warn("addToCart called outside CartProvider"),
+  updateQuantity: async () => console.warn("updateQuantity called outside CartProvider"),
+  removeFromCart: async () => console.warn("removeFromCart called outside CartProvider"),
+  clearCart: async () => console.warn("clearCart called outside CartProvider"),
   getTotalPrice: () => 0,
   getTotalItems: () => 0,
-  isLoadingCart: true, // On considère qu'on charge au début.
+  isLoadingCart: true,
+  isCartSynced: false,
 });
 
-
-// Le composant Provider qui va englober notre application.
+// Le composant Provider
 export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isLoadingCart, setIsLoadingCart] = useState(true);
+  const [isCartSynced, setIsCartSynced] = useState(false);
+  const { userToken } = useAuth();
+  const isMountedRef = useRef(true);
 
-  // Effet pour charger le panier depuis la mémoire du téléphone au lancement de l'app.
-  useEffect(() => {
-    const loadCartFromStorage = async () => {
-      setIsLoadingCart(true);
-      try {
-        const storedCart = await AsyncStorage.getItem("cart");
-        if (storedCart) {
-          setCartItems(JSON.parse(storedCart));
-        }
-      } catch (error) {
-        console.error("Erreur lors du chargement du panier depuis AsyncStorage:", error);
-      } finally {
-        setIsLoadingCart(false);
-      }
-    };
-    loadCartFromStorage();
-  }, []);
+  // Helper : récupérer le token JWT
+  const getAuthToken = async (): Promise<string | null> => {
+    // On préfère userToken du context (déjà chargé)
+    if (userToken) return userToken;
+    // Fallback sur SecureStore
+    return await SecureStore.getItemAsync(TOKEN_KEY);
+  };
 
-  // Effet pour sauvegarder le panier dans la mémoire à chaque fois qu'il est modifié.
-  useEffect(() => {
-    // On ne sauvegarde pas lors du chargement initial pour éviter d'écraser des données.
-    if (!isLoadingCart) {
-        const saveCartToStorage = async () => {
-            try {
-                await AsyncStorage.setItem("cart", JSON.stringify(cartItems));
-            } catch (error) {
-                console.error("Erreur lors de la sauvegarde du panier dans AsyncStorage:", error);
+  // Charger le panier depuis le backend (si connecté) ou AsyncStorage (invité)
+  const loadCart = useCallback(async () => {
+    setIsLoadingCart(true);
+    try {
+      const token = await getAuthToken();
+
+      if (token) {
+        // Utilisateur connecté → charger depuis l'API
+        try {
+          const response = await fetch(`${API_BASE_URL}/cart`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            const items: CartItem[] = (data.items || []).map((item: any) => ({
+              id: String(item.productId),
+              name: item.name,
+              price: item.price,
+              imageUrl: item.imageUrl || "",
+              stock: item.stock,
+              quantity: item.quantity,
+              cartItemId: item.cartItemId,
+            }));
+            if (isMountedRef.current) {
+              setCartItems(items);
+              setIsCartSynced(true);
             }
-        };
-        saveCartToStorage();
+            console.log(`🛒 Panier chargé depuis l'API: ${items.length} article(s)`);
+            return;
+          }
+        } catch (apiError) {
+          console.warn("⚠️ Erreur API panier, fallback AsyncStorage:", apiError);
+        }
+      }
+
+      // Fallback : charger depuis AsyncStorage
+      const storedCart = await AsyncStorage.getItem("cart");
+      if (storedCart && isMountedRef.current) {
+        setCartItems(JSON.parse(storedCart));
+        setIsCartSynced(false);
+      }
+    } catch (error) {
+      console.error("Erreur chargement panier:", error);
+    } finally {
+      if (isMountedRef.current) setIsLoadingCart(false);
+    }
+  }, [userToken]);
+
+  // Charger au démarrage + quand userToken change
+  useEffect(() => {
+    isMountedRef.current = true;
+    loadCart();
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [loadCart]);
+
+  // Sauvegarder dans AsyncStorage (toujours, en backup local)
+  useEffect(() => {
+    if (!isLoadingCart) {
+      AsyncStorage.setItem("cart", JSON.stringify(cartItems)).catch((err) =>
+        console.error("Erreur sauvegarde AsyncStorage:", err)
+      );
     }
   }, [cartItems, isLoadingCart]);
 
+  // Ajouter un produit
+  const addToCart = useCallback(
+    async (itemToAdd: BaseProductType, quantity: number) => {
+      // 1. Mise à jour locale immédiate (optimistic update)
+      let newItems: CartItem[] = [];
+      setCartItems((prevItems) => {
+        const existing = prevItems.find((item) => item.id === itemToAdd.id);
+        if (existing) {
+          newItems = prevItems.map((item) =>
+            item.id === itemToAdd.id
+              ? { ...item, quantity: item.quantity + quantity }
+              : item
+          );
+        } else {
+          newItems = [...prevItems, { ...itemToAdd, quantity }];
+        }
+        return newItems;
+      });
 
-  /**
-   * Ajoute un produit au panier.
-   * Si le produit existe déjà, sa quantité est incrémentée.
-   * Sinon, le produit est ajouté comme un nouvel article.
-   */
-  const addToCart = useCallback((itemToAdd: BaseProductType, quantity: number) => {
-    setCartItems((prevItems) => {
-      const existingItem = prevItems.find((item) => item.id === itemToAdd.id);
+      // 2. Sync backend si connecté
+      const token = await getAuthToken();
+      if (!token) return;
 
-      if (existingItem) {
-        // Le produit existe déjà, on met à jour la quantité
-        return prevItems.map((item) =>
-          item.id === itemToAdd.id
-            ? { ...item, quantity: item.quantity + quantity }
-            : item
-        );
-      } else {
-        // Le produit est nouveau, on l'ajoute à la liste avec sa quantité
-        return [...prevItems, { ...itemToAdd, quantity }];
+      try {
+        await fetch(`${API_BASE_URL}/cart/items`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            productId: parseInt(itemToAdd.id, 10),
+            quantity,
+          }),
+        });
+        console.log(`✅ Ajout panier backend: produit ${itemToAdd.id} x${quantity}`);
+      } catch (error) {
+        console.error("❌ Erreur sync panier (ajout):", error);
       }
-    });
-  }, []);
+    },
+    [userToken]
+  );
 
-  /**
-   * Met à jour la quantité d'un article spécifique dans le panier.
-   * Si la nouvelle quantité est 0 ou moins, l'article est supprimé.
-   */
-  const updateQuantity = useCallback((itemId: string, newQuantity: number) => {
-    setCartItems((prevItems) => {
-      if (newQuantity <= 0) {
-        // Si la quantité est 0 ou moins, on retire l'article du panier
-        return prevItems.filter((item) => item.id !== itemId);
+  // Mettre à jour la quantité
+  const updateQuantity = useCallback(
+    async (itemId: string, newQuantity: number) => {
+      let updatedItem: CartItem | undefined;
+
+      // 1. Mise à jour locale
+      setCartItems((prevItems) => {
+        if (newQuantity <= 0) {
+          return prevItems.filter((item) => item.id !== itemId);
+        }
+        return prevItems.map((item) => {
+          if (item.id === itemId) {
+            updatedItem = { ...item, quantity: newQuantity };
+            return updatedItem;
+          }
+          return item;
+        });
+      });
+
+      // 2. Sync backend
+      const token = await getAuthToken();
+      if (!token) return;
+
+      try {
+        if (newQuantity <= 0) {
+          // Suppression : utiliser l'endpoint DELETE
+          // Mais il faut l'ID du cart_item, pas du product
+          // Option : envoyer quantity=0 et le backend supprime
+          // OU : récupérer cartItemId depuis l'item
+          const item = cartItems.find((i) => i.id === itemId);
+          if (item?.cartItemId) {
+            await fetch(`${API_BASE_URL}/cart/items/${item.cartItemId}`, {
+              method: "DELETE",
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            console.log(`✅ Suppression panier backend: cartItem ${item.cartItemId}`);
+          } else {
+            // Fallback : envoyer quantity=0
+            await fetch(`${API_BASE_URL}/cart/items`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ productId: parseInt(itemId, 10), quantity: 0 }),
+            });
+          }
+        } else {
+          // Mise à jour : envoyer la nouvelle quantité
+          await fetch(`${API_BASE_URL}/cart/items`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              productId: parseInt(itemId, 10),
+              quantity: newQuantity,
+            }),
+          });
+          console.log(`✅ MAJ panier backend: produit ${itemId} → ${newQuantity}`);
+        }
+      } catch (error) {
+        console.error("❌ Erreur sync panier (update):", error);
       }
-      // Sinon, on met à jour la quantité de l'article concerné
-      return prevItems.map((item) =>
-        item.id === itemId ? { ...item, quantity: newQuantity } : item
-      );
-    });
-  }, []);
+    },
+    [userToken, cartItems]
+  );
 
-  /**
-   * Supprime complètement un article du panier, quelle que soit sa quantité.
-   */
-  const removeFromCart = useCallback((itemId: string) => {
-    setCartItems((prevItems) => prevItems.filter((item) => item.id !== itemId));
-  }, []);
+  // Supprimer un article
+  const removeFromCart = useCallback(
+    async (itemId: string) => {
+      const item = cartItems.find((i) => i.id === itemId);
 
-  /**
-   * Vide entièrement le panier.
-   */
-  const clearCart = useCallback(() => {
+      // 1. Mise à jour locale
+      setCartItems((prevItems) => prevItems.filter((item) => item.id !== itemId));
+
+      // 2. Sync backend
+      const token = await getAuthToken();
+      if (!token || !item?.cartItemId) {
+        // Fallback : envoyer quantity=0
+        if (token) {
+          try {
+            await fetch(`${API_BASE_URL}/cart/items`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ productId: parseInt(itemId, 10), quantity: 0 }),
+            });
+          } catch (err) {
+            console.error("❌ Erreur sync panier (remove):", err);
+          }
+        }
+        return;
+      }
+
+      try {
+        await fetch(`${API_BASE_URL}/cart/items/${item.cartItemId}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        console.log(`✅ Suppression panier backend: cartItem ${item.cartItemId}`);
+      } catch (error) {
+        console.error("❌ Erreur sync panier (remove):", error);
+      }
+    },
+    [userToken, cartItems]
+  );
+
+  // Vider le panier
+  const clearCart = useCallback(async () => {
     setCartItems([]);
-  }, []);
 
-  /**
-   * Calcule et retourne le prix total de tous les articles dans le panier.
-   */
+    const token = await getAuthToken();
+    if (!token) return;
+
+    try {
+      await fetch(`${API_BASE_URL}/cart/clear`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      console.log("✅ Panier vidé sur le backend");
+    } catch (error) {
+      console.error("❌ Erreur sync panier (clear):", error);
+    }
+  }, [userToken]);
+
   const getTotalPrice = useCallback(() => {
     return cartItems.reduce((total, item) => {
-      // Nettoie la chaîne de prix pour ne garder que les chiffres et le point décimal.
       const priceString = String(item.price).replace(/[^\d.]/g, "");
       const priceNumber = parseFloat(priceString);
-      
-      if (isNaN(priceNumber)) {
-        return total; // Ignore les prix invalides
-      }
+      if (isNaN(priceNumber)) return total;
       return total + priceNumber * item.quantity;
     }, 0);
   }, [cartItems]);
 
-  /**
-   * Calcule et retourne le nombre total d'unités de produits dans le panier.
-   */
   const getTotalItems = useCallback(() => {
     return cartItems.reduce((total, item) => total + item.quantity, 0);
   }, [cartItems]);
 
-  // L'objet `value` contient tout ce que le contexte va fournir à ses enfants.
   const value = {
     cartItems,
     addToCart,
@@ -175,12 +333,12 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     getTotalPrice,
     getTotalItems,
     isLoadingCart,
+    isCartSynced,
   };
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 };
 
-// Le hook personnalisé pour utiliser facilement le contexte dans d'autres composants.
 export const useCart = () => {
   const context = useContext(CartContext);
   if (context === undefined) {
