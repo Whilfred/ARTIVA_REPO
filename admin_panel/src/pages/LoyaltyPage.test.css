@@ -1,20 +1,13 @@
-/* admin_panel/src/pages/LoyaltyPage.css
-   Programme de fidélité.
 
-   Cette feuille reprend celle de la page Livraison gratuite : les deux pages
-   ont la même forme — une rangée de compteurs, un formulaire de réglages — et
-   doivent se ressembler. Seul le préfixe change (.fid- au lieu de .fs-), pour
-   qu'une retouche sur l'une n'aille pas déformer l'autre à son insu. */
 
-/* Styles propres à la page des conditions de livraison gratuite.
+   Styles propres à la page des conditions de livraison gratuite.
    La structure générale (page-header, back-link, custom-table) vient de
    ProductManagementPage.css, importé en plus de ce fichier. */
 
-/* --- Bandeau de synthèse --------------------------------------------------- */
+
 .fid-stats {
   display: grid;
-  /* auto-fit plutôt qu'un nombre fixe de colonnes : les quatre cartes passent
-     d'elles-mêmes sur une ou deux lignes sur un écran étroit. */
+  
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 16px;
   margin-bottom: 26px;
@@ -45,7 +38,7 @@
 .fid-stat.disponibles .fid-stat-valeur { color: #1e7e34; }
 .fid-stat.offert     .fid-stat-valeur { color: #b45309; }
 
-/* --- Formulaire des conditions -------------------------------------------- */
+
 .fid-carte {
   background: #fff;
   border: 1px solid #e5e7eb;
@@ -102,8 +95,7 @@
   margin-top: 5px;
 }
 
-/* Interrupteur d'activation : une case à cocher native reste la plus lisible,
-   on se contente de lui donner de l'air et une zone cliquable généreuse. */
+
 .fid-interrupteur {
   display: flex;
   align-items: flex-start;
@@ -120,8 +112,7 @@
 .fid-interrupteur-titre { font-weight: 600; color: #111827; font-size: 14px; }
 .fid-interrupteur-aide  { font-size: 12px; color: #6b7280; margin-top: 3px; }
 
-/* Phrase récapitulant les réglages en français. Le formulaire seul laisse le
-   doute sur ce que la combinaison des trois champs produit réellement. */
+
 .fid-resume {
   background: #eff6ff;
   border-left: 4px solid #2563eb;
@@ -159,7 +150,7 @@
 .fid-message.ok   { color: #1e7e34; }
 .fid-message.ko   { color: #dc2626; }
 
-/* --- Pastilles de statut du journal --------------------------------------- */
+
 .fid-pastille {
   display: inline-block;
   padding: 3px 10px;
@@ -183,7 +174,7 @@
 }
 
 
-/* --- Tableau des clients ---------------------------------------------------- */
+
 .fid-points {
   font-weight: 700;
   color: #7c3aed;

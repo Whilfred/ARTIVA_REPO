@@ -6,7 +6,7 @@
    doivent se ressembler. Seul le préfixe change (.fid- au lieu de .fs-), pour
    qu'une retouche sur l'une n'aille pas déformer l'autre à son insu. */
 
-/* Styles propres à la page des conditions de livraison gratuite.
+   Styles propres à la page des conditions de livraison gratuite.
    La structure générale (page-header, back-link, custom-table) vient de
    ProductManagementPage.css, importé en plus de ce fichier. */
 
