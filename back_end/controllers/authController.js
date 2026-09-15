@@ -132,8 +132,6 @@ async function notifyUserLogin(userId, userName, userEmail, isFirstLogin) {
         }
       }
     }
-
-    // 5. Mettre à jour last_login_at
     await db.query(
       'UPDATE users SET last_login_at = NOW() WHERE id = $1',
       [userId]

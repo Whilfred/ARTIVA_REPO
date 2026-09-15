@@ -162,3 +162,40 @@ exports.notifyWishlistUsersOnRestock = async (productId, client) => {
     console.error('Erreur notification wishlist restock:', error);
   }
 };
+
+// --- Voir la wishlist d'un utilisateur (ADMIN) ---
+exports.getUserWishlistAdmin = async (req, res) => {
+  const targetUserId = req.params.userId;
+
+  if (!targetUserId) {
+    return res.status(400).json({ message: 'ID utilisateur manquant.' });
+  }
+
+  try {
+    const query = `
+      SELECT 
+        wi.product_id AS "productId",
+        wi.added_at AS "addedAt",
+        p.name,
+        p.price,
+        p.image_url AS "imageUrl",
+        p.stock,
+        p.is_published
+      FROM wishlist_items wi
+      JOIN products p ON p.id = wi.product_id
+      WHERE wi.user_id = $1
+      ORDER BY wi.added_at DESC;
+    `;
+    const { rows } = await db.query(query, [targetUserId]);
+
+    const items = rows.map(item => ({
+      ...item,
+      price: item.price ? `${parseFloat(item.price).toFixed(2)} FCFA` : 'N/A',
+    }));
+
+    res.status(200).json({ items });
+  } catch (error) {
+    console.error('Erreur admin récupération wishlist:', error);
+    res.status(500).json({ message: 'Erreur serveur.' });
+  }
+};

@@ -228,6 +228,7 @@ exports.clearUserCart = async (req, res) => {
 };
 
 // --- Voir le panier d'un utilisateur (ADMIN) ---
+// --- Voir le panier d'un utilisateur (ADMIN) ---
 exports.getUserCartAdmin = async (req, res) => {
   const targetUserId = req.params.userId;
   try {
@@ -240,11 +241,13 @@ exports.getUserCartAdmin = async (req, res) => {
       SELECT 
         ci.id as "cartItemId", 
         ci.quantity,
+        ci.added_at as "addedAt",
         p.id as "productId", 
         p.name, 
         p.price, 
         p.image_url as "imageUrl", 
-        p.stock
+        p.stock,
+        p.is_published
       FROM cart_items ci
       JOIN products p ON ci.product_id = p.id
       WHERE ci.cart_id = $1
@@ -252,7 +255,22 @@ exports.getUserCartAdmin = async (req, res) => {
     `;
     const { rows: items } = await db.query(itemsQuery, [cart.id]);
 
-    res.status(200).json({ cartId: cart.id, items });
+    let totalAmount = 0;
+    let totalItems = 0;
+    items.forEach(item => {
+      const itemPrice = parseFloat(item.price);
+      if (!isNaN(itemPrice)) {
+        totalAmount += itemPrice * item.quantity;
+      }
+      totalItems += item.quantity;
+    });
+
+    res.status(200).json({ 
+      cartId: cart.id, 
+      items,
+      totalAmount: parseFloat(totalAmount.toFixed(2)),
+      totalItems
+    });
   } catch (error) {
     console.error('Erreur admin récupération panier:', error);
     res.status(500).json({ message: 'Erreur serveur.' });

@@ -1168,3 +1168,64 @@ CREATE INDEX IF NOT EXISTS idx_review_requests_order ON review_requests(order_id
 SELECT column_name, data_type 
 FROM information_schema.columns 
 WHERE table_name = 'review_requests';
+
+-----
+CREATE TABLE IF NOT EXISTS cart_reminders (
+  id SERIAL PRIMARY KEY,
+  cart_id INTEGER NOT NULL REFERENCES carts(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  sent_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(cart_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cart_reminders_cart ON cart_reminders(cart_id);
+
+-- Vérifier
+SELECT column_name, data_type 
+FROM information_schema.columns 
+WHERE table_name = 'cart_reminders';
+
+-----------------------------------
+-- 1. Ajouter last_login_at dans users
+ALTER TABLE users 
+ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP WITH TIME ZONE;
+
+-- 2. Ajouter fcm_token dans admin
+ALTER TABLE admin
+ADD COLUMN IF NOT EXISTS fcm_token TEXT,
+ADD COLUMN IF NOT EXISTS fcm_platform VARCHAR(20),
+ADD COLUMN IF NOT EXISTS fcm_updated_at TIMESTAMP WITH TIME ZONE;
+
+-- 3. Index pour accélérer les requêtes
+CREATE INDEX IF NOT EXISTS idx_users_last_login ON users(last_login_at);
+CREATE INDEX IF NOT EXISTS idx_admin_fcm_token ON admin(fcm_token) WHERE fcm_token IS NOT NULL;
+
+-- 4. Vérifier
+SELECT column_name, data_type 
+FROM information_schema.columns 
+WHERE table_name = 'users' 
+  AND column_name = 'last_login_at';
+
+SELECT column_name, data_type 
+FROM information_schema.columns 
+WHERE table_name = 'admin' 
+  AND column_name IN ('fcm_token', 'fcm_platform', 'fcm_updated_at');
+
+------------------------
+CREATE TABLE IF NOT EXISTS price_drop_notifications (
+  id SERIAL PRIMARY KEY,
+  product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  old_price NUMERIC,
+  new_price NUMERIC,
+  source VARCHAR(20),  -- 'wishlist' ou 'cart'
+  sent_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_price_drop_product_user_day 
+ON price_drop_notifications(product_id, user_id, DATE(sent_at));
+
+DROP INDEX IF EXISTS idx_price_drop_product_user_day;
+
+CREATE INDEX IF NOT EXISTS idx_price_drop_lookup 
+ON price_drop_notifications(product_id, user_id, sent_at);

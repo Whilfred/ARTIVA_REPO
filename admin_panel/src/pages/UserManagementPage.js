@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
 import UserFormModal from '../components/UserFormModal';
-import UserCartModal from '../components/UserCartModal';
+import UserDetailsModal from '../components/UserDetailsModal';
 import { API_BASE_URL } from '../config';
 import './ProductManagementPage.css';
 
@@ -15,8 +15,8 @@ function UserManagementPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
 
-  const [isCartModalOpen, setIsCartModalOpen] = useState(false);
-  const [cartUser, setCartUser] = useState(null);
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [detailsUser, setDetailsUser] = useState(null);
 
   const adminToken = localStorage.getItem('adminToken');
   const navigate = useNavigate();
@@ -56,13 +56,13 @@ function UserManagementPage() {
     setError('');
   };
 
-  const handleOpenCart = (user) => {
-    setCartUser(user);
-    setIsCartModalOpen(true);
+  const handleOpenDetails = (user) => {
+    setDetailsUser(user);
+    setIsDetailsModalOpen(true);
   };
-  const handleCloseCart = () => {
-    setIsCartModalOpen(false);
-    setCartUser(null);
+  const handleCloseDetails = () => {
+    setIsDetailsModalOpen(false);
+    setDetailsUser(null);
   };
 
   const handleSaveUser = (updatedUser) => {
@@ -206,11 +206,11 @@ function UserManagementPage() {
                 </td>
                 <td className="actions-cell">
                   <button
-                    onClick={() => handleOpenCart(user)}
+                    onClick={() => handleOpenDetails(user)}
                     className="action-btn"
-                    title="Voir le panier"
+                    title="Voir panier & wishlist"
                   >
-                    🛒
+                    👁️
                   </button>
                   <button
                     onClick={() => handleOpenModalForEdit(user)}
@@ -258,11 +258,11 @@ function UserManagementPage() {
         />
       )}
 
-      {isCartModalOpen && (
-        <UserCartModal
-          isOpen={isCartModalOpen}
-          onClose={handleCloseCart}
-          user={cartUser}
+      {isDetailsModalOpen && (
+        <UserDetailsModal
+          isOpen={isDetailsModalOpen}
+          onClose={handleCloseDetails}
+          user={detailsUser}
           apiBaseUrl={API_BASE_URL}
           adminToken={adminToken}
         />

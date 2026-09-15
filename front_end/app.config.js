@@ -4,7 +4,7 @@ import 'dotenv/config';
 export default {
   name: "Artiva",
   slug: "artiva",
-  version: "1.6.5",
+  version: "1.6.9",
   sdkVersion: "57.0.0",
   platforms: ["ios", "android", "web"],
   orientation: "portrait",
@@ -38,7 +38,7 @@ export default {
       "VIBRATE"
     ],
     package: "com.fathanemarcos.artiva",
-    versionCode: 78,
+    versionCode: 82,
     googleServicesFile: "./google-services.json"
   },
   web: {
