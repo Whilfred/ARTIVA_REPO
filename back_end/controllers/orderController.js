@@ -7,6 +7,7 @@ const { resoudreZone } = require('../utils/shipping');
 const { v4: uuidv4 } = require('uuid');
 const { sendNewOrderEmails, sendOrderStatusEmail } = require("../utils/sendEmail.js");
 const { sendPushNotification } = require("../services/fcmService");
+const { logActivity, EVENT_TYPES } = require("../services/activityLogger");
 
 // --- Créer une nouvelle commande (CLIENT) ---
 exports.createOrder = async (req, res) => {
@@ -72,7 +73,6 @@ exports.createOrder = async (req, res) => {
         throw new Error(`Stock insuffisant pour ${product.name}`);
       }
 
-      // MAJ stock
       await client.query(
         'UPDATE products SET stock = stock - $1 WHERE id = $2',
         [quantity, item.product_id]
@@ -128,7 +128,6 @@ exports.createOrder = async (req, res) => {
       appliedPromoCode = verif.promo.code;
     }
 
-    // La remise porte sur les produits seuls
     const calculatedTotal = productsTotal - discountAmount + finalShippingCost;
     let finalTotalAmount = frontendTotalAmount !== undefined ? parseFloat(frontendTotalAmount) : calculatedTotal;
 
@@ -312,7 +311,27 @@ exports.createOrder = async (req, res) => {
       `${avantageGagne ? ' | 🎁 avantage livraison acquis' : ''}`
     );
 
-    // ✅ NOUVEAU : Notification PUSH "commande reçue"
+    // 📝 Logger l'activité : création de commande
+    try {
+      await logActivity({
+        userId,
+        userName: req.user.name,
+        userEmail: req.user.email,
+        eventType: EVENT_TYPES.ORDER_CREATED,
+        title: `📦 Commande créée : #${createdOrder.order_number}`,
+        description: `${orderItemsData.length} article(s) — ${finalTotalAmount.toLocaleString('fr-FR')} FCFA`,
+        metadata: {
+          orderId: createdOrder.id,
+          orderNumber: createdOrder.order_number,
+          amount: finalTotalAmount,
+          itemCount: orderItemsData.length,
+        },
+      });
+    } catch (logErr) {
+      console.error('Erreur log order_created:', logErr.message);
+    }
+
+    // ✅ Notification PUSH "commande reçue"
     try {
       const tokenResult = await db.query(
         'SELECT fcm_token FROM users WHERE id = $1 AND fcm_token IS NOT NULL',
@@ -332,7 +351,7 @@ exports.createOrder = async (req, res) => {
       console.error('Erreur push commande:', notifError.message);
     }
 
-    // 🎁 NOUVEAU : Notification PUSH "bon d'achat utilisé"
+    // 🎁 Notification PUSH "bon d'achat utilisé"
     if (appliedPromoCode && discountAmount > 0) {
       try {
         const tokenResult2 = await db.query(
@@ -529,7 +548,6 @@ exports.updateOrderStatusAdmin = async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // Récupérer l'email du client AVANT la mise à jour
     const userQuery = `
       SELECT u.id, u.email, u.name 
       FROM users u
@@ -545,7 +563,6 @@ exports.updateOrderStatusAdmin = async (req, res) => {
     const user = userResult.rows[0];
     const userEmail = user.email;
 
-    // Mettre à jour le statut de la commande
     const updateOrderQuery = `
       UPDATE orders o
       SET status = $1, updated_at = CURRENT_TIMESTAMP 
@@ -559,7 +576,6 @@ exports.updateOrderStatusAdmin = async (req, res) => {
     }
     const updatedOrder = updateResult.rows[0];
 
-    // Statut "livrée" + paiement à la livraison encore en attente
     if (newStatus === 'delivered') {
       const paymentCheckQuery = 'SELECT id, payment_method, status FROM payments WHERE order_id = $1';
       const paymentResult = await client.query(paymentCheckQuery, [orderId]);
@@ -618,6 +634,26 @@ exports.updateOrderStatusAdmin = async (req, res) => {
     }
 
     await client.query('COMMIT');
+
+    // 📝 Logger l'activité : changement de statut
+    try {
+      await logActivity({
+        userId: updatedOrder.user_id,
+        userName: user.name,
+        userEmail: user.email,
+        eventType: EVENT_TYPES.ORDER_STATUS_CHANGED,
+        title: `📦 Statut commande : ${newStatus}`,
+        description: `#${updatedOrder.order_number}`,
+        metadata: {
+          orderId: updatedOrder.id,
+          orderNumber: updatedOrder.order_number,
+          newStatus,
+          trackingNumber: trackingNumber || null,
+        },
+      });
+    } catch (logErr) {
+      console.error('Erreur log order_status_changed:', logErr.message);
+    }
 
     // ✅ ENVOI DE L'EMAIL
     const statusesWithEmail = ['processing', 'shipped', 'delivered', 'cancelled', 'refunded', 'failed'];
