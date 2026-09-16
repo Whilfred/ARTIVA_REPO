@@ -1033,6 +1033,149 @@ const sendPriceDropEmail = async (to, name, {
 };
 
 // =============================================================================
+// EMAIL : Relance wishlist (24h après ajout)
+// =============================================================================
+
+const sendWishlistReminderEmail = async (to, name, { products }) => {
+  const fcfa = (v) => `${Number(v || 0).toLocaleString("fr-FR")} FCFA`;
+  const count = products.length;
+
+  const rows = products
+    .map(
+      (p) => `
+        <tr style="border-bottom:1px solid #ddd;">
+          <td style="padding:10px;">
+            ${p.image_url ? `<img src="${p.image_url}" alt="${p.name}" style="width:50px;height:50px;object-fit:cover;border-radius:5px;vertical-align:middle;margin-right:10px;" />` : '📦 '}
+            <b>${p.name}</b>
+          </td>
+          <td style="padding:10px; text-align:right; font-weight:bold; color:#e91e63;">
+            ${fcfa(p.price)}
+          </td>
+        </tr>
+      `
+    )
+    .join("");
+
+  const htmlContent = carteEmail({
+    titre: "❤️ Vos coups de cœur vous attendent !",
+    couleur: "#e91e63",
+    corps: `
+      <p style="font-size:16px;">
+        Bonjour ${name || "Cher client"},
+      </p>
+      <p style="font-size:15px;">
+        ${count > 1
+          ? `Vous avez <b>${count} articles</b> dans votre liste de souhaits.`
+          : `Vous avez <b>1 article</b> dans votre liste de souhaits.`}
+      </p>
+      <table style="width:100%; border-collapse:collapse; margin-top:10px;">
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="text-align:center; margin:25px 0;">
+        <a href="https://artiva.app/wishlist" style="
+          background:#e91e63;
+          color:white;
+          padding:14px 35px;
+          text-decoration:none;
+          border-radius:5px;
+          font-weight:bold;
+          display:inline-block;
+        ">
+          ❤️ Voir ma liste de souhaits
+        </a>
+      </div>
+      <p style="font-size:13px; color:#888; text-align:center;">
+        💡 Les articles de votre wishlist peuvent être achetés par d'autres clients. Ne tardez pas trop !
+      </p>
+    `,
+    pied: "L'équipe Artiva — Votre wishlist vous attend",
+  });
+
+  await sendMailWithLog(
+    {
+      fromName: "Artiva ❤️",
+      fromEmail: "artiva.app@gmail.com",
+      to,
+      subject: count > 1
+        ? `❤️ ${count} articles vous attendent dans votre wishlist !`
+        : `❤️ Un article vous attend dans votre wishlist !`,
+      html: htmlContent,
+    },
+    "Wishlist-Reminder"
+  );
+};
+
+// =============================================================================
+// EMAIL : Relance panier abandonné (1h après dernière modif)
+// =============================================================================
+
+const sendCartReminderEmail = async (to, name, { items, totalAmount, totalItems }) => {
+  const fcfa = (v) => `${Number(v || 0).toLocaleString("fr-FR")} FCFA`;
+
+  const rows = items
+    .map(
+      (item) => `
+        <tr style="border-bottom:1px solid #ddd;">
+          <td style="padding:10px;">
+            ${item.image_url ? `<img src="${item.image_url}" alt="${item.name}" style="width:50px;height:50px;object-fit:cover;border-radius:5px;vertical-align:middle;margin-right:10px;" />` : '📦 '}
+            <b>${item.name}</b>
+          </td>
+          <td style="padding:10px; text-align:center;">x${item.quantity}</td>
+          <td style="padding:10px; text-align:right; font-weight:bold; color:#FF6B00;">
+            ${fcfa(Number(item.price) * item.quantity)}
+          </td>
+        </tr>
+      `
+    )
+    .join("");
+
+  const htmlContent = carteEmail({
+    titre: "🛒 Votre panier vous attend !",
+    couleur: "#FF6B00",
+    corps: `
+      <p style="font-size:16px;">
+        Bonjour ${name || "Cher client"},
+      </p>
+      <p style="font-size:15px;">
+        Vous avez <b>${totalItems} article${totalItems > 1 ? 's' : ''}</b> dans votre panier 
+        pour un total de <b>${fcfa(totalAmount)}</b>.
+      </p>
+      <table style="width:100%; border-collapse:collapse; margin-top:10px;">
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="text-align:center; margin:25px 0;">
+        <a href="https://artiva.app/cart" style="
+          background:#FF6B00;
+          color:white;
+          padding:14px 35px;
+          text-decoration:none;
+          border-radius:5px;
+          font-weight:bold;
+          display:inline-block;
+        ">
+          🛒 Reprendre ma commande
+        </a>
+      </div>
+      <p style="font-size:13px; color:#888; text-align:center;">
+        💡 Les articles de votre panier peuvent être achetés par d'autres clients. Ne tardez pas trop !
+      </p>
+    `,
+    pied: "L'équipe Artiva — Votre panier vous attend",
+  });
+
+  await sendMailWithLog(
+    {
+      fromName: "Artiva 🛒",
+      fromEmail: "artiva.app@gmail.com",
+      to,
+      subject: `🛒 Votre panier vous attend (${totalItems} article${totalItems > 1 ? 's' : ''} - ${fcfa(totalAmount)})`,
+      html: htmlContent,
+    },
+    "Cart-Reminder"
+  );
+};
+
+// =============================================================================
 // EXPORTS
 // =============================================================================
 
@@ -1049,4 +1192,6 @@ module.exports = {
   sendWelcomeBackEmail,
   sendAdminUserLoginEmail,
   sendPriceDropEmail,
+  sendWishlistReminderEmail,
+  sendCartReminderEmail,
 };

@@ -1,34 +1,17 @@
 // ARTIVA/back_end/utils/cartScheduler.js
-
 const cron = require('node-cron');
 const pool = require('../config/db');
 const { sendPushNotification } = require('../services/fcmService');
+const { sendCartReminderEmail } = require('../utils/sendEmail.js');
 
-/**
- * Planificateur de rappels de panier abandonné.
- *
- * Son rôle :
- * 1. Chercher les paniers modifiés il y a plus de 24h
- * 2. Qui appartiennent à un utilisateur connecté avec token FCM
- * 3. Qui n'ont pas encore reçu de rappel
- * 4. Envoyer une push pour inciter à finaliser
- *
- * Tourne toutes les heures.
- */
-
-// Nombre d'heures après la dernière modification avant d'envoyer le rappel
-const HEURES_AVANT_RAPPEL = 24;
-
-// Fenêtre pour éviter les doublons (1 heure)
-const FENETRE_HEURES = 25;
+const HEURES_AVANT_RAPPEL = 1;
+const FENETRE_HEURES = 2;
 
 function startCartScheduler() {
-  // Toutes les heures à la minute 0
-  cron.schedule('0 * * * *', async () => {
+  cron.schedule('30 * * * *', async () => {
     console.log('[CartScheduler] Vérification des paniers abandonnés...');
 
     try {
-      // Chercher les paniers abandonnés depuis X heures
       const result = await pool.query(
         `
         SELECT 
@@ -36,8 +19,17 @@ function startCartScheduler() {
           c.user_id,
           c.updated_at,
           u.name AS user_name,
+          u.email AS user_email,
           u.fcm_token,
-          COUNT(ci.id)::int AS nb_items,
+          json_agg(
+            json_build_object(
+              'product_id', ci.product_id,
+              'name', p.name,
+              'price', p.price,
+              'quantity', ci.quantity,
+              'image_url', p.image_url
+            ) ORDER BY ci.added_at DESC
+          ) AS items,
           SUM(ci.quantity * p.price) AS total_amount
         FROM carts c
         JOIN users u ON c.user_id = u.id
@@ -59,7 +51,6 @@ function startCartScheduler() {
           )
         GROUP BY c.id, u.id
         HAVING COUNT(ci.id) > 0
-        ORDER BY c.updated_at ASC
         `,
         [HEURES_AVANT_RAPPEL, FENETRE_HEURES]
       );
@@ -76,58 +67,51 @@ function startCartScheduler() {
 
       for (const cart of result.rows) {
         try {
-          const nbItems = cart.nb_items;
+          const items = cart.items;
+          const nbItems = items.reduce((sum, i) => sum + i.quantity, 0);
           const total = parseFloat(cart.total_amount || 0);
-          const totalFormate = total.toLocaleString('fr-FR');
 
-          const body = nbItems > 1
-            ? `Vous avez ${nbItems} articles dans votre panier (${totalFormate} FCFA). Finalisez votre commande !`
-            : `Vous avez 1 article dans votre panier (${totalFormate} FCFA). Finalisez votre commande !`;
+          // 1. Push
+          if (cart.fcm_token) {
+            await sendPushNotification(cart.fcm_token, {
+              title: '🛒 Votre panier vous attend !',
+              body: nbItems > 1
+                ? `${nbItems} articles (${total.toLocaleString('fr-FR')} FCFA) n'attendent que vous.`
+                : `"${items[0].name}" vous attend dans votre panier.`,
+              data: { screen: 'cart' },
+            });
+          }
 
-          await sendPushNotification(cart.fcm_token, {
-            title: '🛒 Votre panier vous attend !',
-            body: body,
-            data: {
-              screen: 'cart',
-              cartId: String(cart.cart_id),
-            },
-          });
+          // 2. Email
+          if (cart.user_email) {
+            await sendCartReminderEmail(cart.user_email, cart.user_name, {
+              items,
+              totalAmount: total,
+              totalItems: nbItems,
+            });
+          }
 
-          // Marquer comme envoyé (empêche le spam)
+          // 3. Marquer comme envoyé
           await pool.query(
             `INSERT INTO cart_reminders (cart_id, user_id) VALUES ($1, $2)`,
             [cart.cart_id, cart.user_id]
           );
 
           envoyees++;
-          console.log(
-            `[CartScheduler] ✅ Push envoyée à ${cart.user_name} (user ${cart.user_id}) - ${nbItems} article(s)`
-          );
-        } catch (pushError) {
+          console.log(`[CartScheduler] ✅ Relance envoyée à ${cart.user_name} (${nbItems} article(s))`);
+        } catch (err) {
           echecs++;
-          console.error(
-            `[CartScheduler] ❌ Erreur push user ${cart.user_id}:`,
-            pushError.message
-          );
+          console.error(`[CartScheduler] ❌ Erreur user ${cart.user_id}:`, err.message);
         }
       }
 
-      console.log(
-        `[CartScheduler] Terminé : ${envoyees} envoyées, ${echecs} échecs.`
-      );
+      console.log(`[CartScheduler] Terminé : ${envoyees} envoyées, ${echecs} échecs.`);
     } catch (error) {
-      console.error(
-        '[CartScheduler Error] Erreur lors de l\'exécution :',
-        error
-      );
+      console.error('[CartScheduler Error]:', error);
     }
   });
 
-  console.log(
-    '[Scheduler] Planificateur de paniers abandonnés démarré avec succès.'
-  );
+  console.log('[Scheduler] Planificateur de paniers abandonnés démarré avec succès.');
 }
 
-module.exports = {
-  startCartScheduler,
-};
+module.exports = { startCartScheduler };

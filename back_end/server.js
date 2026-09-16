@@ -4,6 +4,7 @@ const db = require('./config/db');
 const { startCampaignScheduler } = require('./utils/campaignScheduler');
 const { startReviewScheduler } = require('./utils/reviewScheduler');
 const { startCartScheduler } = require('./utils/cartScheduler');
+const { startWishlistReminderScheduler } = require('./utils/wishlistReminderScheduler');
 const PORT = process.env.PORT || 3001;
 
 async function startServer() {
@@ -19,6 +20,7 @@ async function startServer() {
       startCampaignScheduler();
       startReviewScheduler();
       startCartScheduler();
+      startWishlistReminderScheduler();
     });
 
   } catch (error) {
@@ -26,5 +28,4 @@ async function startServer() {
     process.exit(1);
   }
 }
-
 startServer();
