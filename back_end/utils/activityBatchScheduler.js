@@ -1,9 +1,13 @@
 // ARTIVA/back_end/utils/activityBatchScheduler.js
-// Envoie un résumé d'activité groupé aux admins toutes les 5 minutes.
+// Envoie un résumé d'activité groupé à UN SEUL email : artiva.app@gmail.com
+// Toutes les 5 minutes.
 
 const cron = require('node-cron');
 const pool = require('../config/db');
 const { sendActivityBatchEmail } = require('../utils/sendEmail.js');
+
+// ✅ Email destinataire unique (configurable via variable d'env sur Render)
+const ACTIVITY_EMAIL = process.env.ACTIVITY_EMAIL || 'artiva.app@gmail.com';
 
 function startActivityBatchScheduler() {
   // Toutes les 5 minutes
@@ -12,7 +16,6 @@ function startActivityBatchScheduler() {
 
     try {
       // Chercher les activités non encore envoyées
-      // (on utilise metadata->>'batch_sent' pour éviter les doublons)
       const result = await pool.query(`
         SELECT 
           id, user_id, user_name, user_email, 
@@ -31,26 +34,15 @@ function startActivityBatchScheduler() {
 
       console.log(`[ActivityBatch] ${result.rows.length} activité(s) à envoyer.`);
 
-      // Récupérer tous les admins
-      const admins = await pool.query(
-        'SELECT email FROM admin WHERE email IS NOT NULL'
-      );
-
-      if (admins.rows.length === 0) {
-        console.log('[ActivityBatch] Aucun admin.');
-        return;
-      }
-
-      // Envoyer à tous les admins
-      for (const admin of admins.rows) {
-        try {
-          await sendActivityBatchEmail(admin.email, {
-            activities: result.rows,
-            period: `5 dernières minutes (${result.rows.length} action${result.rows.length > 1 ? 's' : ''})`,
-          });
-        } catch (emailErr) {
-          console.error(`[ActivityBatch] Erreur email admin ${admin.email}:`, emailErr.message);
-        }
+      // ✅ Envoi à UN SEUL destinataire : artiva.app@gmail.com
+      try {
+        await sendActivityBatchEmail(ACTIVITY_EMAIL, {
+          activities: result.rows,
+          period: `5 dernières minutes (${result.rows.length} action${result.rows.length > 1 ? 's' : ''})`,
+        });
+        console.log(`[ActivityBatch] ✅ Résumé envoyé à ${ACTIVITY_EMAIL}`);
+      } catch (emailErr) {
+        console.error(`[ActivityBatch] ❌ Erreur email ${ACTIVITY_EMAIL}:`, emailErr.message);
       }
 
       // Marquer comme envoyées
@@ -62,13 +54,13 @@ function startActivityBatchScheduler() {
         [ids]
       );
 
-      console.log(`[ActivityBatch] ✅ ${result.rows.length} activité(s) envoyée(s) à ${admins.rows.length} admin(s).`);
+      console.log(`[ActivityBatch] ✅ ${result.rows.length} activité(s) marquée(s) comme envoyées.`);
     } catch (error) {
       console.error('[ActivityBatch Error]:', error);
     }
   });
 
-  console.log('[Scheduler] Planificateur de résumé d\'activité démarré avec succès.');
+  console.log(`[Scheduler] Planificateur de résumé d'activité démarré (destinataire : ${ACTIVITY_EMAIL}).`);
 }
 
 module.exports = { startActivityBatchScheduler };
