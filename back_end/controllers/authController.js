@@ -8,18 +8,12 @@ const {
   sendResetPasswordCode,
   sendWelcomeEmail,
   sendWouhouGiftEmail,
-  sendWelcomeBackEmail,
-  sendAdminUserLoginEmail
+  sendWelcomeBackEmail
 } = require("../utils/sendEmail.js");
 const { sendPushNotification } = require("../services/fcmService");
 const { logActivity, EVENT_TYPES } = require("../services/activityLogger");
 
 require('dotenv').config();
-
-// ==========================
-// EMAIL ADMIN DE NOTIFICATION (fixe)
-// ==========================
-const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL || 'artiva.app@gmail.com';
 
 // ==========================
 // LOGIN ADMIN (sans 2FA)
@@ -67,7 +61,7 @@ function generateCode() {
 }
 
 // ==========================
-// NOTIFIER CONNEXION UTILISATEUR
+// NOTIFIER CONNEXION UTILISATEUR (push + email au user uniquement)
 // ==========================
 async function notifyUserLogin(userId, userName, userEmail, isFirstLogin) {
   try {
@@ -78,7 +72,7 @@ async function notifyUserLogin(userId, userName, userEmail, isFirstLogin) {
     );
     const userFcmToken = userResult.rows[0]?.fcm_token;
 
-    // 📝 Logger l'activité de connexion
+    // 📝 Logger l'activité (pour le journal admin)
     try {
       await logActivity({
         userId,
@@ -111,7 +105,7 @@ async function notifyUserLogin(userId, userName, userEmail, isFirstLogin) {
       console.log(`ℹ️ Pas de token FCM pour user ${userId}`);
     }
 
-    // 3. Email à l'utilisateur (À CHAQUE connexion)
+    // 3. Email à l'utilisateur
     try {
       await sendWelcomeBackEmail(userEmail, userName);
       console.log(`📧 Email de connexion envoyé à ${userEmail}`);
@@ -119,41 +113,7 @@ async function notifyUserLogin(userId, userName, userEmail, isFirstLogin) {
       console.error(`❌ Erreur email connexion à ${userEmail}:`, emailError.message);
     }
 
-    // 4. ✅ Notifier UNIQUEMENT artiva.app@gmail.com (email)
-    try {
-      await sendAdminUserLoginEmail(ADMIN_NOTIFY_EMAIL, {
-        name: userName,
-        email: userEmail,
-        isFirstLogin,
-        date: new Date().toISOString(),
-      });
-      console.log(`📧 Email connexion envoyé à ${ADMIN_NOTIFY_EMAIL}`);
-    } catch (emailError) {
-      console.error(`❌ Erreur email ${ADMIN_NOTIFY_EMAIL}:`, emailError.message);
-    }
-
-    // 4 bis. Push à artiva.app@gmail.com (si token FCM existe)
-    try {
-      const notifyUserResult = await db.query(
-        'SELECT fcm_token FROM admin WHERE email = $1 AND fcm_token IS NOT NULL',
-        [ADMIN_NOTIFY_EMAIL]
-      );
-
-      if (notifyUserResult.rows.length > 0) {
-        await sendPushNotification(notifyUserResult.rows[0].fcm_token, {
-          title: isFirstLogin ? '🎉 Nouvel utilisateur inscrit !' : '👋 Utilisateur connecté',
-          body: `${userName} (${userEmail}) vient de se connecter`,
-          data: { screen: 'admin' },
-        });
-        console.log(`📲 Push admin envoyée à ${ADMIN_NOTIFY_EMAIL}`);
-      } else {
-        console.log(`ℹ️ Pas de token FCM pour ${ADMIN_NOTIFY_EMAIL}`);
-      }
-    } catch (pushError) {
-      console.error(`❌ Erreur push admin ${ADMIN_NOTIFY_EMAIL}:`, pushError.message);
-    }
-
-    // 5. Mettre à jour last_login_at
+    // 4. Mettre à jour last_login_at
     await db.query(
       'UPDATE users SET last_login_at = NOW() WHERE id = $1',
       [userId]
@@ -367,13 +327,12 @@ const verifyLoginCode = async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    // ✅ Détecter la 1ère connexion
     const isFirstLogin = !user.last_login_at;
 
-    // Répondre IMMÉDIATEMENT au client (ne pas bloquer)
+    // Répondre IMMÉDIATEMENT
     res.json({ token, user, message: "Connexion validée avec succès" });
 
-    // ✅ En arrière-plan : notifier
+    // ✅ En arrière-plan : push + email au user
     setImmediate(() => {
       notifyUserLogin(user.id, user.name, user.email, isFirstLogin)
         .catch((err) => console.error("Erreur notifyUserLogin:", err));
@@ -440,7 +399,7 @@ const googleAuth = async (req, res) => {
     let isFirstLogin = false;
 
     if (userResult.rows.length === 0) {
-      // ⚠️ NOUVEL UTILISATEUR GOOGLE
+      // NOUVEL UTILISATEUR GOOGLE
       const insertResult = await db.query(
         `INSERT INTO users (name, email, google_id, picture, is_email_verified, role, is_active, created_at)
          VALUES ($1, $2, $3, $4, true, 'customer', true, NOW())
@@ -466,7 +425,7 @@ const googleAuth = async (req, res) => {
         console.error('Erreur log user_register (Google):', logErr.message);
       }
 
-      // ✅ Envoyer les emails de bienvenue et cadeau pour les inscriptions Google
+      // ✅ Emails de bienvenue
       try {
         await Promise.all([
           sendWelcomeEmail(email, user.name),
@@ -478,7 +437,7 @@ const googleAuth = async (req, res) => {
       }
 
     } else {
-      // ⚠️ UTILISATEUR EXISTANT
+      // UTILISATEUR EXISTANT
       isFirstLogin = !userResult.rows[0].last_login_at;
 
       const updateResult = await db.query(
@@ -501,7 +460,7 @@ const googleAuth = async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    // ✅ Répondre IMMÉDIATEMENT
+    // Répondre IMMÉDIATEMENT
     res.json({
       success: true,
       token,
@@ -515,7 +474,7 @@ const googleAuth = async (req, res) => {
       }
     });
 
-    // ✅ En arrière-plan : notifier
+    // ✅ En arrière-plan : push + email au user
     setImmediate(() => {
       notifyUserLogin(user.id, user.name, user.email, isFirstLogin)
         .catch((err) => console.error("Erreur notifyUserLogin (Google):", err));
