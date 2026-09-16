@@ -1,4 +1,6 @@
+// ARTIVA/back_end/controllers/cartController.js
 const db = require('../config/db');
+const { logActivity, EVENT_TYPES } = require('../services/activityLogger');
 
 // --- Récupérer ou créer le panier actif de l'utilisateur ---
 async function getActiveCart(userId, client) {
@@ -73,7 +75,6 @@ exports.getUserCart = async (req, res) => {
 };
 
 // --- Ajouter/Mettre à jour un article dans le panier ---
-// ✅ MODIFIÉ : accepte quantity = 0 pour supprimer l'article
 exports.addItemToCart = async (req, res) => {
   const userId = req.user.id;
   const { productId, quantity } = req.body;
@@ -93,13 +94,32 @@ exports.addItemToCart = async (req, res) => {
 
     const cart = await getActiveCart(userId, client);
 
-    // ✅ NOUVEAU : Si quantity = 0, supprimer l'article
+    // Si quantity = 0, supprimer l'article
     if (parsedQuantity === 0) {
       const deleteResult = await client.query(
         'DELETE FROM cart_items WHERE cart_id = $1 AND product_id = $2 RETURNING id',
         [cart.id, productId]
       );
       await client.query('COMMIT');
+
+      // 📝 Logger la suppression
+      try {
+        const userInfo = await db.query('SELECT name, email FROM users WHERE id = $1', [userId]);
+        if (userInfo.rows.length > 0) {
+          await logActivity({
+            userId,
+            userName: userInfo.rows[0].name,
+            userEmail: userInfo.rows[0].email,
+            eventType: EVENT_TYPES.CART_REMOVE,
+            title: `🗑️ Retrait panier`,
+            description: `Produit #${productId}`,
+            metadata: { productId },
+          });
+        }
+      } catch (logErr) {
+        console.error('Erreur log cart_remove:', logErr.message);
+      }
+
       return res.status(200).json({ 
         message: 'Article supprimé du panier.',
         deleted: deleteResult.rowCount > 0
@@ -135,6 +155,7 @@ exports.addItemToCart = async (req, res) => {
     }
 
     let savedItem;
+    let isNew = false;
     if (existingItemResult.rows.length > 0) {
       const updatedItemResult = await client.query(
         'UPDATE cart_items SET quantity = $1 WHERE id = $2 RETURNING *',
@@ -147,9 +168,29 @@ exports.addItemToCart = async (req, res) => {
         [cart.id, productId, finalQuantity]
       );
       savedItem = newItemResult.rows[0];
+      isNew = true;
     }
     
     await client.query('COMMIT');
+
+    // 📝 Logger l'activité
+    try {
+      const userInfo = await db.query('SELECT name, email FROM users WHERE id = $1', [userId]);
+      if (userInfo.rows.length > 0) {
+        await logActivity({
+          userId,
+          userName: userInfo.rows[0].name,
+          userEmail: userInfo.rows[0].email,
+          eventType: isNew ? EVENT_TYPES.CART_ADD : EVENT_TYPES.CART_UPDATE,
+          title: isNew ? `🛒 Ajout panier` : `🔄 MAJ panier`,
+          description: `"${productName}" x${finalQuantity}`,
+          metadata: { productId, productName, quantity: finalQuantity },
+        });
+      }
+    } catch (logErr) {
+      console.error('Erreur log cart_add/update:', logErr.message);
+    }
+
     res.status(200).json({ 
         message: 'Article mis à jour dans le panier.', 
         item: { 
@@ -196,6 +237,26 @@ exports.removeItemFromCart = async (req, res) => {
     }
     
     await client.query('COMMIT');
+
+    // 📝 Logger l'activité
+    try {
+      const userInfo = await db.query('SELECT name, email FROM users WHERE id = $1', [userId]);
+      const productInfo = await db.query('SELECT name FROM products WHERE id = $1', [deleteResult.rows[0].product_id]);
+      if (userInfo.rows.length > 0) {
+        await logActivity({
+          userId,
+          userName: userInfo.rows[0].name,
+          userEmail: userInfo.rows[0].email,
+          eventType: EVENT_TYPES.CART_REMOVE,
+          title: `🗑️ Retrait panier`,
+          description: productInfo.rows[0]?.name || `Produit #${deleteResult.rows[0].product_id}`,
+          metadata: { productId: deleteResult.rows[0].product_id },
+        });
+      }
+    } catch (logErr) {
+      console.error('Erreur log cart_remove:', logErr.message);
+    }
+
     res.status(200).json({ message: 'Article supprimé du panier.', deletedCartItemId: cartItemId, productId: deleteResult.rows[0].product_id });
   } catch (error) {
     await client.query('ROLLBACK');
@@ -217,6 +278,23 @@ exports.clearUserCart = async (req, res) => {
     await client.query('DELETE FROM cart_items WHERE cart_id = $1', [cart.id]);
 
     await client.query('COMMIT');
+
+    // 📝 Logger
+    try {
+      const userInfo = await db.query('SELECT name, email FROM users WHERE id = $1', [userId]);
+      if (userInfo.rows.length > 0) {
+        await logActivity({
+          userId,
+          userName: userInfo.rows[0].name,
+          userEmail: userInfo.rows[0].email,
+          eventType: EVENT_TYPES.CART_REMOVE,
+          title: `🗑️ Panier vidé`,
+        });
+      }
+    } catch (logErr) {
+      console.error('Erreur log cart_clear:', logErr.message);
+    }
+
     res.status(200).json({ message: 'Panier vidé avec succès.' });
   } catch (error) {
     await client.query('ROLLBACK');
@@ -227,7 +305,6 @@ exports.clearUserCart = async (req, res) => {
   }
 };
 
-// --- Voir le panier d'un utilisateur (ADMIN) ---
 // --- Voir le panier d'un utilisateur (ADMIN) ---
 exports.getUserCartAdmin = async (req, res) => {
   const targetUserId = req.params.userId;
