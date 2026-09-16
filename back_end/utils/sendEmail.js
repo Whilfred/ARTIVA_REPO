@@ -1179,6 +1179,94 @@ const sendCartReminderEmail = async (to, name, { items, totalAmount, totalItems 
 // EXPORTS
 // =============================================================================
 
+// =============================================================================
+// EMAIL : Résumé d'activité batch (toutes les 5 min)
+// =============================================================================
+
+const sendActivityBatchEmail = async (adminEmail, { activities, period }) => {
+  if (!activities || activities.length === 0) return;
+
+  // Grouper par type
+  const grouped = {
+    cart: [],
+    wishlist: [],
+    order: [],
+    app: [],
+    email: [],
+    push: [],
+    other: [],
+  };
+
+  activities.forEach((a) => {
+    const type = a.event_type;
+    const time = new Date(a.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const user = a.user_name || a.user_email || 'Anonyme';
+    const desc = a.title || a.description || '';
+
+    const line = `<tr><td style="padding:4px 8px; color:#666; white-space:nowrap;">${time}</td><td style="padding:4px 8px;">${user}</td><td style="padding:4px 8px;">${desc}</td></tr>`;
+
+    if (type.startsWith('cart_')) grouped.cart.push(line);
+    else if (type.startsWith('wishlist_')) grouped.wishlist.push(line);
+    else if (type.startsWith('order_')) grouped.order.push(line);
+    else if (type.startsWith('app_')) grouped.app.push(line);
+    else if (type === 'email_sent') grouped.email.push(line);
+    else if (type === 'push_sent') grouped.push.push(line);
+    else grouped.other.push(line);
+  });
+
+  const section = (emoji, label, items) => {
+    if (items.length === 0) return '';
+    return `
+      <h3 style="margin-top:20px; color:#333;">${emoji} ${label} (${items.length})</h3>
+      <table style="width:100%; border-collapse:collapse; font-size:13px;">
+        <tbody>${items.join('')}</tbody>
+      </table>
+    `;
+  };
+
+  const htmlContent = carteEmail({
+    titre: `📊 Activité Artiva — ${activities.length} action${activities.length > 1 ? 's' : ''}`,
+    couleur: '#2196F3',
+    corps: `
+      <p style="font-size:14px; color:#666;">
+        Période : ${period || '5 dernières minutes'}
+      </p>
+      ${section('📦', 'Commandes', grouped.order)}
+      ${section('🛒', 'Paniers', grouped.cart)}
+      ${section('❤️', 'Wishlists', grouped.wishlist)}
+      ${section('🚪', 'App', grouped.app)}
+      ${section('📧', 'Emails envoyés', grouped.email)}
+      ${section('📲', 'Pushs envoyées', grouped.push)}
+      ${section('📝', 'Autres', grouped.other)}
+      <div style="text-align:center; margin-top:25px;">
+        <a href="https://artiva.app/admin/activity" style="
+          background:#2196F3;
+          color:white;
+          padding:12px 30px;
+          text-decoration:none;
+          border-radius:5px;
+          font-weight:bold;
+          display:inline-block;
+        ">
+          📊 Voir tout dans l'admin
+        </a>
+      </div>
+    `,
+    pied: "Notification automatique Artiva — Résumé d'activité",
+  });
+
+  await sendMailWithLog(
+    {
+      fromName: "Artiva 📊",
+      fromEmail: "artiva.app@gmail.com",
+      to: adminEmail,
+      subject: `📊 Activité Artiva — ${activities.length} action${activities.length > 1 ? 's' : ''}`,
+      html: htmlContent,
+    },
+    "Activity-Batch"
+  );
+};
+
 module.exports = {
   sendLoginCode,
   sendResetPasswordCode,
@@ -1194,4 +1282,6 @@ module.exports = {
   sendPriceDropEmail,
   sendWishlistReminderEmail,
   sendCartReminderEmail,
+  sendActivityBatchEmail,
+
 };

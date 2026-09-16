@@ -2,10 +2,11 @@
 const db = require('../config/db');
 const { sendWishlistRestockEmail } = require('../utils/sendEmail.js');
 const { sendPushNotification } = require('../services/fcmService');
+const { logActivity, EVENT_TYPES } = require('../services/activityLogger');
 
 // Récupérer la liste de souhaits de l'utilisateur connecté
 exports.getWishlist = async (req, res) => {
-  const userId = req.user.id; // De authMiddleware
+  const userId = req.user.id;
   try {
     const query = `
       SELECT 
@@ -54,6 +55,26 @@ exports.addToWishlist = async (req, res) => {
     const query = 'INSERT INTO wishlist_items (user_id, product_id) VALUES ($1, $2) ON CONFLICT (user_id, product_id) DO NOTHING RETURNING *;';
     const { rows } = await db.query(query, [userId, productId]);
     
+    // 📝 Logger l'activité (seulement si ajout réel)
+    if (rows.length > 0) {
+      try {
+        const userInfo = await db.query('SELECT name, email FROM users WHERE id = $1', [userId]);
+        if (userInfo.rows.length > 0) {
+          await logActivity({
+            userId,
+            userName: userInfo.rows[0].name,
+            userEmail: userInfo.rows[0].email,
+            eventType: EVENT_TYPES.WISHLIST_ADD,
+            title: `❤️ Ajout wishlist`,
+            description: `Produit #${productId}`,
+            metadata: { productId },
+          });
+        }
+      } catch (logErr) {
+        console.error('Erreur log wishlist_add:', logErr.message);
+      }
+    }
+
     if (rows.length > 0) {
         res.status(201).json({ message: 'Produit ajouté à la liste de souhaits.', item: rows[0] });
     } else {
@@ -84,6 +105,25 @@ exports.removeFromWishlist = async (req, res) => {
     if (result.rowCount === 0) {
       return res.status(404).json({ message: 'Produit non trouvé dans la liste de souhaits de l\'utilisateur.' });
     }
+
+    // 📝 Logger l'activité
+    try {
+      const userInfo = await db.query('SELECT name, email FROM users WHERE id = $1', [userId]);
+      if (userInfo.rows.length > 0) {
+        await logActivity({
+          userId,
+          userName: userInfo.rows[0].name,
+          userEmail: userInfo.rows[0].email,
+          eventType: EVENT_TYPES.WISHLIST_REMOVE,
+          title: `💔 Retrait wishlist`,
+          description: `Produit #${productId}`,
+          metadata: { productId },
+        });
+      }
+    } catch (logErr) {
+      console.error('Erreur log wishlist_remove:', logErr.message);
+    }
+
     res.status(200).json({ message: 'Produit retiré de la liste de souhaits.', item: result.rows[0] });
   } catch (error) {
     console.error('Erreur suppression de la wishlist:', error);
@@ -92,13 +132,9 @@ exports.removeFromWishlist = async (req, res) => {
 };
 
 // --- Notifier les utilisateurs ayant ce produit en wishlist qu'il est de retour en stock ---
-// À appeler depuis productController.js, juste après un UPDATE qui fait
-// passer le stock de 0 (ou moins) à un nombre positif. Ne fait rien si
-// le produit n'est dans aucune wishlist.
 exports.notifyWishlistUsersOnRestock = async (productId, client) => {
   const db_or_client = client || db;
   try {
-    // Récupérer les infos utilisateurs ET leur token FCM en une seule requête
     const query = `
       SELECT 
         u.id AS user_id,
@@ -123,11 +159,9 @@ exports.notifyWishlistUsersOnRestock = async (productId, client) => {
 
     console.log(`📢 Produit ${productId} de retour en stock : ${rows.length} utilisateur(s) à notifier`);
 
-    // Récupérer le nom du produit (identique pour tous)
     const productName = rows[0].product_name;
 
     for (const row of rows) {
-      // 1. Envoyer l'email (logique existante)
       try {
         await sendWishlistRestockEmail(row.email, [{ 
           name: row.product_name, 
@@ -137,7 +171,6 @@ exports.notifyWishlistUsersOnRestock = async (productId, client) => {
         console.error(`Erreur envoi email restock wishlist à ${row.email}:`, emailError);
       }
 
-      // 2. NOUVEAU : Envoyer la push (si l'utilisateur a un token)
       if (row.fcm_token) {
         try {
           await sendPushNotification(row.fcm_token, {

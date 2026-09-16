@@ -12,6 +12,7 @@ const {
   sendAdminUserLoginEmail
 } = require("../utils/sendEmail.js");
 const { sendPushNotification } = require("../services/fcmService");
+const { logActivity, EVENT_TYPES } = require("../services/activityLogger");
 
 require('dotenv').config();
 
@@ -72,6 +73,21 @@ async function notifyUserLogin(userId, userName, userEmail, isFirstLogin) {
     );
     const userFcmToken = userResult.rows[0]?.fcm_token;
 
+    // 📝 Logger l'activité de connexion
+    try {
+      await logActivity({
+        userId,
+        userName,
+        userEmail,
+        eventType: EVENT_TYPES.APP_LOGIN,
+        title: isFirstLogin ? '🎉 Première connexion' : '👤 Connexion',
+        description: `${userName} (${userEmail})`,
+        metadata: { isFirstLogin },
+      });
+    } catch (logErr) {
+      console.error('Erreur log app_login:', logErr.message);
+    }
+
     // 2. Push à l'utilisateur
     if (userFcmToken) {
       try {
@@ -104,7 +120,6 @@ async function notifyUserLogin(userId, userName, userEmail, isFirstLogin) {
     );
 
     for (const admin of admins.rows) {
-      // Email admin
       if (admin.email) {
         try {
           await sendAdminUserLoginEmail(admin.email, {
@@ -118,7 +133,6 @@ async function notifyUserLogin(userId, userName, userEmail, isFirstLogin) {
         }
       }
 
-      // Push admin
       if (admin.fcm_token) {
         try {
           await sendPushNotification(admin.fcm_token, {
@@ -236,6 +250,21 @@ const registerUser = async (req, res) => {
     );
 
     const user = newUser.rows[0];
+
+    // 📝 Logger l'inscription
+    try {
+      await logActivity({
+        userId: user.id,
+        userName: user.name,
+        userEmail: user.email,
+        eventType: EVENT_TYPES.USER_REGISTER,
+        title: `🎊 Nouvelle inscription`,
+        description: `${name} (${email})`,
+        metadata: { source: 'email' },
+      });
+    } catch (logErr) {
+      console.error('Erreur log user_register:', logErr.message);
+    }
 
     // ✅ ENVOI DES DEUX EMAILS : BIENVENUE + CADEAU WOUHOU
     try {
@@ -413,6 +442,21 @@ const googleAuth = async (req, res) => {
       user = insertResult.rows[0];
       isFirstLogin = true;
       console.log(`[Google Auth] Nouvel utilisateur créé: ${email}`);
+
+      // 📝 Logger l'inscription Google
+      try {
+        await logActivity({
+          userId: user.id,
+          userName: user.name,
+          userEmail: user.email,
+          eventType: EVENT_TYPES.USER_REGISTER,
+          title: `🎊 Nouvelle inscription (Google)`,
+          description: `${user.name} (${email})`,
+          metadata: { source: 'google' },
+        });
+      } catch (logErr) {
+        console.error('Erreur log user_register (Google):', logErr.message);
+      }
 
       // ✅ Envoyer les emails de bienvenue et cadeau pour les inscriptions Google
       try {

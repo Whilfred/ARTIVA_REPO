@@ -5,6 +5,7 @@ const { startCampaignScheduler } = require('./utils/campaignScheduler');
 const { startReviewScheduler } = require('./utils/reviewScheduler');
 const { startCartScheduler } = require('./utils/cartScheduler');
 const { startWishlistReminderScheduler } = require('./utils/wishlistReminderScheduler');
+const { startActivityBatchScheduler } = require('./utils/activityBatchScheduler');
 const PORT = process.env.PORT || 3001;
 
 async function startServer() {
@@ -21,6 +22,7 @@ async function startServer() {
       startReviewScheduler();
       startCartScheduler();
       startWishlistReminderScheduler();
+      startActivityBatchScheduler();
     });
 
   } catch (error) {
@@ -28,4 +30,5 @@ async function startServer() {
     process.exit(1);
   }
 }
+
 startServer();
