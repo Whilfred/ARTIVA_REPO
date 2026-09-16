@@ -1,7 +1,7 @@
 // ARTIVA/back_end/app.js
 const express = require('express');
 const cors = require('cors');
-require('dotenv').config(); // Charger les variables d'environnement dès le départ
+require('dotenv').config();
 
 // Importer les routes
 const authRoutes = require('./routes/authRoutes');
@@ -18,6 +18,8 @@ const loyaltyRoutes = require('./routes/loyaltyRoutes');
 const livraisonRoutes = require('./routes/livraisonRoutes');
 const avisRouter = require('./routes/avis');
 const campaignRoutes = require('./routes/campaignRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+
 const app = express();
 
 app.use(cors());
@@ -46,8 +48,9 @@ app.use('/api/promo', promoRoutes);
 app.use('/api/fidelite', loyaltyRoutes);
 app.use('/api/livraison', livraisonRoutes);
 app.use('/api/campaigns', campaignRoutes);
-app.use('/api', loyaltyRoutes);
+app.use('/api/admin', adminRoutes);
 
+app.use('/api', loyaltyRoutes);
 app.use('/api', avisRouter);
 
 app.use((err, req, res, next) => {
