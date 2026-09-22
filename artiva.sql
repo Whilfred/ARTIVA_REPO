@@ -1229,3 +1229,82 @@ DROP INDEX IF EXISTS idx_price_drop_product_user_day;
 
 CREATE INDEX IF NOT EXISTS idx_price_drop_lookup 
 ON price_drop_notifications(product_id, user_id, sent_at);
+
+---------16-09-2026
+CREATE TABLE IF NOT EXISTS wishlist_reminders (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  sent_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(user_id, product_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_wishlist_reminders_lookup 
+ON wishlist_reminders(user_id, product_id, sent_at);
+
+-- Vérifier
+SELECT column_name, data_type 
+FROM information_schema.columns 
+WHERE table_name = 'wishlist_reminders'
+ORDER BY ordinal_position;
+
+
+---------------------
+CREATE TABLE activity_log (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  user_name VARCHAR(255),
+  user_email VARCHAR(255),
+  event_type VARCHAR(50) NOT NULL,
+  -- 'wishlist_add', 'cart_add', 'app_exit', 'email_sent', 'push_sent'
+  title VARCHAR(255),
+  description TEXT,
+  metadata JSONB,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_activity_user ON activity_log(user_id, created_at DESC);
+CREATE INDEX idx_activity_type ON activity_log(event_type, created_at DESC);
+
+------------------------------------------22-09-2026
+CREATE TABLE IF NOT EXISTS user_product_clicks (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  session_id VARCHAR(64),
+  product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  duration_seconds INTEGER DEFAULT 0,
+  device_type VARCHAR(20),
+  referrer VARCHAR(100),
+  clicked_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_upc_user ON user_product_clicks(user_id, clicked_at DESC);
+CREATE INDEX IF NOT EXISTS idx_upc_product ON user_product_clicks(product_id, clicked_at DESC);
+CREATE INDEX IF NOT EXISTS idx_upc_date ON user_product_clicks(clicked_at DESC);
+
+-- Vérifier
+SELECT column_name, data_type 
+FROM information_schema.columns 
+WHERE table_name = 'user_product_clicks'
+ORDER BY ordinal_position;
+
+--------------------------- 22 - 09 - 2026
+CREATE TABLE IF NOT EXISTS home_banners (
+  id SERIAL PRIMARY KEY,
+  image_url TEXT NOT NULL,
+  title VARCHAR(255),
+  subtitle VARCHAR(255),
+  link_url TEXT,
+  display_order INTEGER DEFAULT 0,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_banners_active ON home_banners(is_active, display_order);
+
+-- Vérifier
+SELECT column_name, data_type 
+FROM information_schema.columns 
+WHERE table_name = 'home_banners'
+ORDER BY ordinal_position;

@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Dimensions,
   FlatList,
-  TextInput, // Ajouté pour le formulaire
+  TextInput,
   Share,
   Linking,
   Modal,
@@ -29,8 +29,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import LoadingArtiva from '../product/LoadingArtiva';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { API_BASE_URL } from "../../constants/Api"; // adresse du backend (locale ou prod) — voir ce fichier
-
+import { API_BASE_URL } from "../../constants/Api";
+import { trackProductClick, updateClickDuration } from "../../services/clickTracker";
 
 // --- INTERFACES ---
 
@@ -63,7 +63,6 @@ interface ViewableItemInfo<T> {
   isViewable: boolean;
 }
 
-// Interface réelle venant de l'API (Fichier 1)
 interface Review {
   id: string | number;
   user_name: string;
@@ -72,18 +71,10 @@ interface Review {
   created_at: string;
 }
 
-
 // --- CONSTANTES ---
-
-// --- PRODUCTION (désactivé en local) : adresse désormais centralisée dans constants/Api.ts ---
-// const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api";
-//   Constants.expoConfig?.extra?.API_BASE_URL ?? "https://back-end-purple-log-1280.fly.dev/api";
-// J'ai gardé l'IP du fichier 1 qui semble être celle de ton backend actif
 
 const { width: screenWidth } = Dimensions.get("window");
 
-// --- Largeur des ProductCard dans les carrousels horizontaux de cette page ---
-// (Produits similaires / Vous pourriez aimer / Consulté récemment)
 const SIMILAR_PRODUCT_CARD_WIDTH = screenWidth * 0.42;
 
 const formatPriceForDisplay = (
@@ -103,7 +94,7 @@ export default function ProductDetailScreen() {
   // Hooks
   const { id: routeId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { effectiveAppColorScheme, userToken } = useAuth(); // Ajout userToken
+  const { effectiveAppColorScheme, userToken } = useAuth();
   const { cartItems, addToCart } = useCart();
   const { addToWishlist, removeFromWishlist, isProductInWishlist } =
     useWishlist();
@@ -114,7 +105,7 @@ export default function ProductDetailScreen() {
   const colors = Colors[currentScheme];
   const pageBackgroundColor = currentScheme === "dark" ? "#121212" : "#F2F2F2";
   const cardBackgroundColor = colors.background;
-  const GAP_SIZE = 4; // Espacement entre les sections
+  const GAP_SIZE = 4;
 
   // États Produit
   const [product, setProduct] = useState<ProductDetail | null>(null);
@@ -127,11 +118,9 @@ export default function ProductDetailScreen() {
   const [cartMessage, setCartMessage] = useState<string | null>(null);
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
 
-  // AJOUTE CECI : Pour stocker l'URL de l'image qu'on veut voir en grand (null = rien d'ouvert)
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
 
-  // Mini-player vidéo auto-play en overlay sur le carrousel (bas droite)
   const [showVideoOverlay, setShowVideoOverlay] = useState(true);
 
   // États Produits Similaires / Historique
@@ -143,7 +132,7 @@ export default function ProductDetailScreen() {
   const [recentlyViewed, setRecentlyViewed] = useState<BaseProductType[]>([]);
   const [isLoadingSimilar, setIsLoadingSimilar] = useState(false);
 
-  // États Avis (Venant du Fichier 1)
+  // États Avis
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reviewText, setReviewText] = useState<string>("");
   const [reviewetoiles, setReviewetoiles] = useState<number>(5);
@@ -151,39 +140,31 @@ export default function ProductDetailScreen() {
 
   const isInWishlist = product ? isProductInWishlist(product.id) : false;
 
+  // 📊 TRACKING : Refs pour le clic + la durée
+  const clickIdRef = useRef<number | null>(null);
+  const enterTimeRef = useRef<number>(Date.now());
 
-  // --- Vidéo (expo-video, depuis le SDK 57) ---------------------------------
-  // expo-av a été supprimé après le SDK 54. Son composant <Video> est remplacé
-  // par un couple : un objet « player » créé par useVideoPlayer, et une vue
-  // <VideoView> qui l'affiche. Les commandes passent désormais par le player
-  // (player.play()) et non plus par une ref sur la vue.
+  // --- Vidéo ---
   const videoViewRef = useRef<VideoView>(null);
   const [isMuted, setIsMuted] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
 
-  // La source doit garder la même référence d'un rendu à l'autre, sinon le
-  // player serait recréé en boucle. `null` est accepté tant que le produit
-  // n'est pas chargé : les hooks doivent être appelés avant les retours
-  // anticipés plus bas (règle des Hooks).
   const videoSource = useMemo(
     () => (product?.video_url ? { uri: product.video_url } : null),
     [product?.video_url]
   );
 
-  // Mini-aperçu en surimpression : muet, en boucle, démarrage automatique.
   const overlayPlayer = useVideoPlayer(videoSource, (player) => {
     player.loop = true;
     player.muted = true;
     player.play();
   });
 
-  // Lecteur principal : à l'arrêt au départ, piloté par l'utilisateur.
   const mainPlayer = useVideoPlayer(videoSource, (player) => {
     player.loop = false;
     player.muted = true;
   });
 
-  // Le son du lecteur principal suit le bouton 🔊 / 🔇.
   useEffect(() => {
     mainPlayer.muted = isMuted;
   }, [isMuted, mainPlayer]);
@@ -244,12 +225,11 @@ export default function ProductDetailScreen() {
     fetchProductDetails();
   }, [fetchProductDetails]);
 
-  // Réaffiche le mini-player vidéo à chaque nouveau produit / nouvelle vidéo
   useEffect(() => {
     setShowVideoOverlay(true);
   }, [product?.video_url]);
 
-  // --- 2. CHARGEMENT AVIS (Logique Fichier 1) ---
+  // --- 2. CHARGEMENT AVIS ---
   const fetchReviews = useCallback(async () => {
     if (!product) return;
     try {
@@ -257,7 +237,6 @@ export default function ProductDetailScreen() {
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
-        // S'assurer que 'data.avis' existe, sinon tableau vide
         setReviews(data.avis || []);
       }
     } catch (e) {
@@ -345,13 +324,36 @@ export default function ProductDetailScreen() {
   // Déclencher les effets secondaires quand 'product' change
   useEffect(() => {
     if (product) {
-      fetchReviews(); // On charge les avis
+      fetchReviews();
       fetchSimilarProducts();
       handleRecentHistory();
     }
   }, [product, fetchReviews, fetchSimilarProducts, handleRecentHistory]);
 
-  // --- 4. SOUMETTRE UN AVIS (Logique Fichier 1) ---
+  // --- 📊 TRACKING : enregistrer le clic à l'entrée + la durée à la sortie ---
+  useEffect(() => {
+    if (!routeId) return;
+
+    const trackEntry = async () => {
+      const clickId = await trackProductClick(routeId, 'product_page');
+      clickIdRef.current = clickId;
+      enterTimeRef.current = Date.now();
+      console.log('📊 Tracking clic produit:', routeId, '→ clickId:', clickId);
+    };
+
+    trackEntry();
+
+    // Cleanup : quand on quitte la page, on envoie la durée
+    return () => {
+      if (clickIdRef.current) {
+        const durationSeconds = (Date.now() - enterTimeRef.current) / 1000;
+        console.log('📊 Durée passée sur le produit:', durationSeconds.toFixed(1), 's');
+        updateClickDuration(clickIdRef.current, durationSeconds);
+      }
+    };
+  }, [routeId]);
+
+  // --- 4. SOUMETTRE UN AVIS ---
   const submitReview = async () => {
     if (!userToken || !product || !reviewText.trim()) return;
     setIsSubmittingReview(true);
@@ -370,7 +372,7 @@ export default function ProductDetailScreen() {
       if (resp.ok) {
         setReviewText("");
         setReviewetoiles(5);
-        await fetchReviews(); // Recharger les avis
+        await fetchReviews();
       } else {
         alert("Erreur lors de l'envoi de l'avis");
       }
@@ -383,29 +385,22 @@ export default function ProductDetailScreen() {
   };
 
   // --- AUTRES ACTIONS ---
-  // --- MODIFICATION ICI : Vérification de la connexion ---
   const handleAddToCart = () => {
     if (!product) return;
 
-    // Si pas de token (pas connecté)
     if (!userToken) {
       setCartMessage("Connectez-vous pour commander !");
       setTimeout(() => setCartMessage(null), 3000);
-      return; // On arrête la fonction ici, on n'ajoute rien au panier
+      return;
     }
 
-    // Si connecté, on ajoute au panier avec la quantité choisie
     addToCart(product, quantity);
     setCartMessage("Ajouté au panier !");
     setTimeout(() => setCartMessage(null), 2000);
   };
 
-  // --- ACTION APPEL SERVICE CLIENT ---
   const handleCallSupport = () => {
-    // Remplace ce numéro par le vrai numéro du service client
     const phoneNumber = "+2290149326514";
-
-    // Ouvre l'application téléphone
     Linking.openURL(`tel:${phoneNumber}`);
   };
 
@@ -415,7 +410,6 @@ export default function ProductDetailScreen() {
     if (type === "decrease") {
       if (quantity > 1) setQuantity(quantity - 1);
     } else {
-      // On vérifie le stock (si stock disponible)
       if (product.stock && quantity < product.stock) {
         setQuantity(quantity + 1);
       }
@@ -432,24 +426,21 @@ export default function ProductDetailScreen() {
     }
   };
 
-  // --- RENDU HELPER ---
   const onViewableItemsChanged = useCallback(({ viewableItems }: any) => {
     if (viewableItems.length > 0 && viewableItems[0].index !== null) {
       setActiveIndex(viewableItems[0].index);
     }
   }, []);
 
-  // Calcul moyenne notes
   const averageRating = reviews.length
     ? (
         reviews.reduce((acc, curr) => acc + curr.etoiles, 0) / reviews.length
       ).toFixed(1)
     : "N/A";
 
-// Après
-if (isLoading) {
-  return <LoadingArtiva theme={currentScheme} />;
-}
+  if (isLoading) {
+    return <LoadingArtiva theme={currentScheme} />;
+  }
 
   if (!product)
     return (
@@ -460,9 +451,8 @@ if (isLoading) {
 
   return (
     <View style={{ flex: 1, backgroundColor: pageBackgroundColor }}>
-      {/* 1. On cache le header par défaut */}
       <Stack.Screen options={{ headerShown: false }} />
-      {/* 2. Header simplifié - juste la flèche retour */}
+
       <View
         style={{
           flexDirection: "row",
@@ -482,7 +472,7 @@ if (isLoading) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 100 }}
       >
-        {/* --- BLOC 1 : CAROUSEL IMAGE (CORRIGÉ) --- */}
+        {/* --- BLOC 1 : CAROUSEL IMAGE --- */}
         <View
           style={{
             backgroundColor: "#F9F9F9",
@@ -514,7 +504,6 @@ if (isLoading) {
                   >
                     <Image
                       source={{ uri: item.image_url }}
-                      // Essaye 'cover' si tu veux que ça remplisse tout, ou 'contain' pour voir l'image entière
                       resizeMode="contain"
                       style={{
                         width: "100%",
@@ -525,7 +514,6 @@ if (isLoading) {
                 )}
               />
 
-              {/* Badge style "Photos X/X" + "Vidéo" (transparent noir/blanc) */}
               <View style={styles.mediaBadgeContainer}>
                 <View style={styles.mediaBadgePill}>
                   <Ionicons
@@ -551,7 +539,6 @@ if (isLoading) {
                   </View>
                 )}
 
-                {/* Pill "Options" - dernière position, renvoie à la dernière image */}
                 <TouchableOpacity
                   onPress={() =>
                     flatListRef.current?.scrollToIndex({
@@ -565,7 +552,6 @@ if (isLoading) {
                 </TouchableOpacity>
               </View>
 
-              {/* Mini-player vidéo auto-play, en bas à droite de l'image */}
               {product.video_url && showVideoOverlay && (
                 <View style={styles.videoOverlayBox}>
                   <VideoView
@@ -600,7 +586,7 @@ if (isLoading) {
           )}
         </View>
 
-        {/* --- BANDE DE MINIATURES SOUS LA GRANDE IMAGE --- */}
+        {/* --- BANDE DE MINIATURES --- */}
         {product.imagesForCarousel && product.imagesForCarousel.length > 0 && (
           <ScrollView
             horizontal
@@ -632,10 +618,8 @@ if (isLoading) {
           </ScrollView>
         )}
 
-        {/* --- 2. MAIN INFO CARD (VERSION FINALE) --- */}
+        {/* --- 2. MAIN INFO CARD --- */}
         <View style={[styles.card, { backgroundColor: "#F9F9F9", borderRadius: 8 }]}>
-          
-          {/* LIGNE 1 : Nom du produit (Noir, pas gras) */}
           <Text
             style={{
               fontSize: 22,
@@ -648,7 +632,6 @@ if (isLoading) {
             {product.name}
           </Text>
 
-          {/* LIGNE 2 : Catégorie */}
           <Text style={{ fontSize: 14, color: colors.subtleText, marginBottom: 12 }}>
             <Text style={{fontWeight: '600'}}>Catégorie : </Text> 
             {product.categories_names && product.categories_names.length > 0
@@ -656,14 +639,11 @@ if (isLoading) {
               : "Général"}
           </Text>
 
-          {/* LIGNE 3 : Prix + Prix Barré + Badge Promo */}
           <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>
-            {/* Prix actuel */}
             <Text style={{ fontSize: 26, fontWeight: "bold", color: colors.tint, marginRight: 10 }}>
               {product.price}
             </Text>
 
-            {/* Prix barré */}
             <Text
               style={{
                 fontSize: 16,
@@ -678,10 +658,9 @@ if (isLoading) {
               FCFA
             </Text>
 
-            {/* Badge Promo Ajusté */}
             <View
               style={{
-                backgroundColor: colors.tint, // Fond orange pour ressortir
+                backgroundColor: colors.tint,
                 paddingHorizontal: 6,
                 paddingVertical: 3,
                 borderRadius: 4,
@@ -693,7 +672,6 @@ if (isLoading) {
             </View>
           </View>
 
-          {/* LIGNE 4 : État du stock (Gris moyen) */}
           <View style={{ marginBottom: 10 }}>
             {product.stock && product.stock > 0 ? (
               <Text style={{ color: "#666", fontWeight: "500", fontSize: 14 }}>
@@ -706,18 +684,15 @@ if (isLoading) {
             )}
           </View>
 
-          {/* LIGNE 5 : Avis (Gauche) + Icônes (Droite) */}
           <View 
             style={{ 
                 flexDirection: "row", 
                 justifyContent: "space-between", 
                 alignItems: "center",
-                // borderTopWidth: 1,      // Petite ligne de séparation
                 borderTopColor: "#E0E0E0",
                 paddingTop: 2
             }}
           >
-            {/* GAUCHE : Étoiles + Nombre d'avis */}
             <View style={{ flexDirection: "row", alignItems: "center" }}>
               <View style={{ flexDirection: "row", marginRight: 8 }}>
                 {[1, 2, 3, 4, 5].map((i) => (
@@ -735,7 +710,6 @@ if (isLoading) {
               </Text>
             </View>
 
-            {/* DROITE : Icônes Partage et Coeur (ORANGE) */}
             <View style={{ flexDirection: "row", gap: 20 }}>
               <TouchableOpacity onPress={handleShare}>
                 <Ionicons name="share-social-outline" size={24} color={colors.tint} />
@@ -750,11 +724,10 @@ if (isLoading) {
                 <FontAwesome
                   name={isInWishlist ? "heart" : "heart-o"}
                   size={24}
-                  color={isInWishlist ? "#E74C3C" : colors.tint} // Coeur plein rouge, sinon Orange
+                  color={isInWishlist ? "#E74C3C" : colors.tint}
                 />
               </TouchableOpacity>
             </View>
-
           </View>
         </View>
 
@@ -763,7 +736,6 @@ if (isLoading) {
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
             Nos offres
           </Text>
-          {/* Offre 1 : Besoin d'aide (Cliquable pour appeler) */}
           <TouchableOpacity 
             onPress={handleCallSupport}
             style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 5 }}
@@ -779,14 +751,11 @@ if (isLoading) {
                     +229 01 49 32 65 14
                 </Text>
                 </Text>
-                
             </View>
           </TouchableOpacity>
 
-          {/* Séparateur */}
           <View style={{ height: 1, backgroundColor: '#eee', marginVertical: 10 }} />
 
-          {/* Offre 2 : Moins de frais */}
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 5 }}>
             <View style={{ width: 40, alignItems: 'center' }}>
                 <Ionicons name="wallet-outline" size={26} color={colors.tint} />
@@ -796,10 +765,8 @@ if (isLoading) {
             </Text>
           </View>
 
-          {/* Séparateur */}
           <View style={{ height: 1, backgroundColor: '#eee', marginVertical: 10 }} />
 
-          {/* Offre 3 : Livraison gratuite */}
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 5 }}>
             <View style={{ width: 40, alignItems: 'center', marginTop: 2 }}>
                 <Ionicons name="cube-outline" size={26} color={colors.tint} />
@@ -807,7 +774,6 @@ if (isLoading) {
             <Text style={{ color: colors.text, fontSize: 14, flex: 1, lineHeight: 20 }}>
 🎁 Offre spéciale : Dépensez 100 000 FCFA en 7 jours et bénéficiez d'une livraison gratuite jusqu'à 5 000 FCFA sur votre prochaine commande            </Text>
           </View>
-
         </View>
 
         {/* --- LIVRAISON ET RETOURS --- */}
@@ -822,11 +788,7 @@ if (isLoading) {
           </Text>
           <View style={styles.infoRow}>
             <View style={styles.iconBox}>
-              <Ionicons
-                name="car-sport-outline"
-                size={20}
-                color={colors.tint}
-              />
+              <Ionicons name="car-sport-outline" size={20} color={colors.tint} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.infoTitle, { color: colors.text }]}>
@@ -841,11 +803,7 @@ if (isLoading) {
           <View style={[styles.divider, { backgroundColor: colors.card }]} />
           <View style={styles.infoRow}>
             <View style={styles.iconBox}>
-              <MaterialIcons
-                name="assignment-return"
-                size={20}
-                color={colors.tint}
-              />
+              <MaterialIcons name="assignment-return" size={20} color={colors.tint} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.infoTitle, { color: colors.text }]}>
@@ -858,185 +816,182 @@ if (isLoading) {
           </View>
         </View>
 
-{/* --- DESCRIPTION & VIDEO --- */}
-<View
-  style={[
-    styles.card,
-    { backgroundColor: cardBackgroundColor, marginTop: GAP_SIZE },
-  ]}
->
-  <Text style={[styles.sectionTitle, { color: colors.text }]}>
-    Détails sur le produit
-  </Text>
+        {/* --- DESCRIPTION & VIDEO --- */}
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: cardBackgroundColor, marginTop: GAP_SIZE },
+          ]}
+        >
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Détails sur le produit
+          </Text>
 
-  <Text
-    numberOfLines={isDescriptionExpanded ? undefined : 3}
-    style={[
-      styles.descriptionText,
-      { color: colors.text, marginBottom: 15 },
-    ]}
-  >
-    {product.description || "Aucune description disponible."}
-  </Text>
+          <Text
+            numberOfLines={isDescriptionExpanded ? undefined : 3}
+            style={[
+              styles.descriptionText,
+              { color: colors.text, marginBottom: 15 },
+            ]}
+          >
+            {product.description || "Aucune description disponible."}
+          </Text>
 
-  {product.description && product.description.length > 100 && (
-    <TouchableOpacity
-      onPress={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
-      style={{ marginBottom: 15 }}
-    >
-      <Text style={{ color: colors.tint, fontWeight: "600" }}>
-        {isDescriptionExpanded ? "Masquer la description" : "Lire la suite"}
-      </Text>
-    </TouchableOpacity>
-  )}
+          {product.description && product.description.length > 100 && (
+            <TouchableOpacity
+              onPress={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
+              style={{ marginBottom: 15 }}
+            >
+              <Text style={{ color: colors.tint, fontWeight: "600" }}>
+                {isDescriptionExpanded ? "Masquer la description" : "Lire la suite"}
+              </Text>
+            </TouchableOpacity>
+          )}
 
-  <View
-    style={{
-      borderTopWidth: 1,
-      borderTopColor: colors.card,
-      paddingTop: 15,
-    }}
-  >
-    <Text
-      style={{
-        fontSize: 14,
-        fontWeight: "bold",
-        color: colors.text,
-        marginBottom: 10,
-      }}
-    >
-      Présentation Vidéo
-    </Text>
-
-    {product.video_url ? (
-      <TouchableOpacity
-        activeOpacity={0.9}
-        onPress={() => {
-          if (isPlaying) {
-            mainPlayer.pause();
-          } else {
-            mainPlayer.play();
-          }
-          setIsPlaying(!isPlaying);
-        }}
-        style={{
-          width: "100%",
-          height: 220,
-          borderRadius: 12,
-          backgroundColor: "#000",
-          justifyContent: "center",
-          alignItems: "center",
-          marginBottom: 15,
-          overflow: "hidden",
-        }}
-      >
-        <VideoView
-          ref={videoViewRef}
-          player={mainPlayer}
-          style={{ width: "100%", height: "100%" }}
-          contentFit="contain"
-          nativeControls={false}
-        />
-
-        {/* ▶️ Play */}
-        {!isPlaying && (
           <View
             style={{
-              position: "absolute",
-              backgroundColor: "rgba(0,0,0,0.5)",
-              padding: 16,
-              borderRadius: 50,
+              borderTopWidth: 1,
+              borderTopColor: colors.card,
+              paddingTop: 15,
             }}
           >
-            <Text style={{ color: "#fff", fontSize: 22 }}>▶</Text>
-          </View>
-        )}
-
-        {/* 🔊 / ⛶ */}
-        <View
-          style={{
-            position: "absolute",
-            bottom: 10,
-            right: 10,
-            flexDirection: "row",
-            gap: 12,
-          }}
-        >
-          <TouchableOpacity
-            onPress={() => setIsMuted(!isMuted)}
-            style={{
-              backgroundColor: "rgba(0,0,0,0.6)",
-              padding: 8,
-              borderRadius: 20,
-            }}
-          >
-            <Text style={{ color: "#fff" }}>
-              {isMuted ? "🔇" : "🔊"}
+            <Text
+              style={{
+                fontSize: 14,
+                fontWeight: "bold",
+                color: colors.text,
+                marginBottom: 10,
+              }}
+            >
+              Présentation Vidéo
             </Text>
-          </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={() =>
-              videoViewRef.current?.enterFullscreen()
-            }
-            style={{
-              backgroundColor: "rgba(0,0,0,0.6)",
-              padding: 8,
-              borderRadius: 20,
-            }}
-          >
-            <Text style={{ color: "#fff" }}>⛶</Text>
-          </TouchableOpacity>
+            {product.video_url ? (
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={() => {
+                  if (isPlaying) {
+                    mainPlayer.pause();
+                  } else {
+                    mainPlayer.play();
+                  }
+                  setIsPlaying(!isPlaying);
+                }}
+                style={{
+                  width: "100%",
+                  height: 220,
+                  borderRadius: 12,
+                  backgroundColor: "#000",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  marginBottom: 15,
+                  overflow: "hidden",
+                }}
+              >
+                <VideoView
+                  ref={videoViewRef}
+                  player={mainPlayer}
+                  style={{ width: "100%", height: "100%" }}
+                  contentFit="contain"
+                  nativeControls={false}
+                />
+
+                {!isPlaying && (
+                  <View
+                    style={{
+                      position: "absolute",
+                      backgroundColor: "rgba(0,0,0,0.5)",
+                      padding: 16,
+                      borderRadius: 50,
+                    }}
+                  >
+                    <Text style={{ color: "#fff", fontSize: 22 }}>▶</Text>
+                  </View>
+                )}
+
+                <View
+                  style={{
+                    position: "absolute",
+                    bottom: 10,
+                    right: 10,
+                    flexDirection: "row",
+                    gap: 12,
+                  }}
+                >
+                  <TouchableOpacity
+                    onPress={() => setIsMuted(!isMuted)}
+                    style={{
+                      backgroundColor: "rgba(0,0,0,0.6)",
+                      padding: 8,
+                      borderRadius: 20,
+                    }}
+                  >
+                    <Text style={{ color: "#fff" }}>
+                      {isMuted ? "🔇" : "🔊"}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => videoViewRef.current?.enterFullscreen()}
+                    style={{
+                      backgroundColor: "rgba(0,0,0,0.6)",
+                      padding: 8,
+                      borderRadius: 20,
+                    }}
+                  >
+                    <Text style={{ color: "#fff" }}>⛶</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            ) : (
+              <Text
+                style={{
+                  fontStyle: "italic",
+                  color: colors.subtleText,
+                  marginBottom: 20,
+                }}
+              >
+                Aucune vidéo disponible.
+              </Text>
+            )}
+
+            <Text
+              style={{
+                fontSize: 14,
+                fontWeight: "bold",
+                color: colors.text,
+                marginBottom: 10,
+              }}
+            >
+              Détails en images
+            </Text>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {product.imagesForCarousel.map((img, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={{ marginRight: 10 }}
+                  onPress={() => setSelectedImage(img.image_url)}
+                >
+                  <Image
+                    source={{ uri: img.image_url }}
+                    style={{
+                      width: 120,
+                      height: 120,
+                      borderRadius: 8,
+                      backgroundColor: colors.background,
+                      borderWidth: 1,
+                      borderColor: colors.card,
+                    }}
+                    resizeMode="cover"
+                  />
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
         </View>
-      </TouchableOpacity>
-    ) : (
-      <Text
-        style={{
-          fontStyle: "italic",
-          color: colors.subtleText,
-          marginBottom: 20,
-        }}
-      >
-        Aucune vidéo disponible.
-      </Text>
-    )}
 
-    <Text
-      style={{
-        fontSize: 14,
-        fontWeight: "bold",
-        color: colors.text,
-        marginBottom: 10,
-      }}
-    >
-      Détails en images
-    </Text>
-
-    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-      {product.imagesForCarousel.map((img, index) => (
-        <TouchableOpacity
-          key={index}
-          style={{ marginRight: 10 }}
-          onPress={() => setSelectedImage(img.image_url)}
-        >
-          <Image
-            source={{ uri: img.image_url }}
-            style={{
-              width: 120,
-              height: 120,
-              borderRadius: 8,
-              backgroundColor: colors.background,
-              borderWidth: 1,
-              borderColor: colors.card,
-            }}
-            resizeMode="cover"
-          />
-        </TouchableOpacity>
-      ))}
-    </ScrollView>
-  </View>
-</View>
-        {/* --- AVIS CLIENTS (Dynamique et Design) --- */}
+        {/* --- AVIS CLIENTS --- */}
         <View
           style={[
             styles.card,
@@ -1047,7 +1002,6 @@ if (isLoading) {
             Avis Clients
           </Text>
 
-          {/* Résumé Note */}
           <View style={styles.ratingSummaryBox}>
             <View>
               <Text
@@ -1071,7 +1025,6 @@ if (isLoading) {
             </View>
           </View>
 
-          {/* Liste des avis */}
           {reviews.length === 0 ? (
             <Text
               style={{
@@ -1125,7 +1078,6 @@ if (isLoading) {
             ))
           )}
 
-          {/* Formulaire d'ajout d'avis */}
           {userToken ? (
            <View
   style={{
@@ -1158,7 +1110,6 @@ if (isLoading) {
     ))}
   </View>
 
-  {/* Conteneur TextInput + icône */}
   <View style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: colors.card, borderRadius: 8 }}>
     <TextInput
       placeholder="Partagez votre expérience..."
@@ -1329,14 +1280,13 @@ if (isLoading) {
               gap: 10,
             }}
           >
-            {/* 1. Bouton MAISON (En premier + Contour Orange) */}
             <TouchableOpacity
               style={{
                 width: 50,
                 justifyContent: "center",
                 alignItems: "center",
                 borderWidth: 1,
-                borderColor: colors.tint, // Contour Orange
+                borderColor: colors.tint,
                 borderRadius: 8,
                 backgroundColor: cardBackgroundColor,
               }}
@@ -1345,14 +1295,13 @@ if (isLoading) {
               <Ionicons name="home-outline" size={24} color={colors.tint} />
             </TouchableOpacity>
 
-            {/* 2. Bouton TÉLÉPHONE (En deuxième + Contour Orange) */}
             <TouchableOpacity
               style={{
                 width: 50,
                 justifyContent: "center",
                 alignItems: "center",
                 borderWidth: 1,
-                borderColor: colors.tint, // Contour Orange
+                borderColor: colors.tint,
                 borderRadius: 8,
                 backgroundColor: cardBackgroundColor,
               }}
@@ -1361,9 +1310,7 @@ if (isLoading) {
               <Ionicons name="call-outline" size={24} color={colors.tint} />
             </TouchableOpacity>
 
-            {/* 3. Bouton PRINCIPAL (Dynamique) */}
             {userToken ? (
-              // --- CAS CONNECTÉ : Bouton avec + et - intégrés ---
               <View
                 style={{
                   flex: 1,
@@ -1373,7 +1320,6 @@ if (isLoading) {
                   overflow: "hidden",
                 }}
               >
-                {/* Zone Moins */}
                 <TouchableOpacity
                   onPress={() => handleQuantityChange("decrease")}
                   style={{
@@ -1386,7 +1332,6 @@ if (isLoading) {
                   <Ionicons name="remove" size={24} color="white" />
                 </TouchableOpacity>
 
-                {/* Zone Centrale (Ajouter) */}
                 <TouchableOpacity
                   onPress={handleAddToCart}
                   style={{
@@ -1408,7 +1353,6 @@ if (isLoading) {
                   </Text>
                 </TouchableOpacity>
 
-                {/* Zone Plus */}
                 <TouchableOpacity
                   onPress={() => handleQuantityChange("increase")}
                   style={{
@@ -1422,7 +1366,6 @@ if (isLoading) {
                 </TouchableOpacity>
               </View>
             ) : (
-              // --- CAS NON CONNECTÉ : Bouton simple ---
               <TouchableOpacity
                 style={{
                   flex: 1,
@@ -1430,8 +1373,6 @@ if (isLoading) {
                   borderRadius: 8,
                   justifyContent: "center",
                   alignItems: "center",
-                  // borderWidth: 1,
-                  // borderColor: colors.tint // Contour orange aussi ici pour harmoniser
                 }}
                 onPress={handleAddToCart}
               >
@@ -1469,8 +1410,6 @@ if (isLoading) {
           )}
         </View>
       </Modal>
-
-      {/* Fin du Return principal */}
     </View>
   );
 }
@@ -1489,7 +1428,6 @@ const styles = StyleSheet.create({
   },
   dot: { height: 6, width: 6, borderRadius: 3, marginHorizontal: 3 },
 
-  // Badge "Photos X/X" + "Vidéo" en overlay sur le carrousel
   mediaBadgeContainer: {
     position: "absolute",
     bottom: 15,
@@ -1513,7 +1451,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  // Mini-player vidéo auto-play en bas à droite de l'image
   videoOverlayBox: {
     position: "absolute",
     bottom: 55,
@@ -1537,7 +1474,6 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
 
-  // Bande de miniatures sous la grande image
   thumbnailStripContent: {
     paddingHorizontal: 15,
     paddingVertical: 10,
@@ -1556,8 +1492,6 @@ const styles = StyleSheet.create({
     height: "100%",
   },
 
-  // Espacement entre les ProductCard dans les carrousels
-  // "Produits similaires" / "Vous pourriez aimer" / "Consulté récemment"
   similarCardSpacing: {
     marginRight: 10,
   },
@@ -1593,7 +1527,6 @@ const styles = StyleSheet.create({
   infoDesc: { fontSize: 12, marginTop: 2 },
   divider: { height: 1, width: "100%", marginVertical: 4 },
 
-  // Video Styles
   videoPlaceholder: {
     width: "100%",
     height: 180,
@@ -1613,17 +1546,10 @@ const styles = StyleSheet.create({
     color: "white",
     marginTop: 10,
     fontWeight: "bold",
-    // Volontairement conserve sous cette forme : react-native-web signale
-    // textShadow* comme deprecie au profit de "textShadow", mais React Native
-    // 0.86 ne connait pas encore cette propriete (absente de TextStyle). La
-    // remplacer casserait la compilation TypeScript et le rendu natif.
-    // A rebasculer quand RN exposera "textShadow" — contrairement a boxShadow,
-    // deja disponible, qui a remplace les shadow* ailleurs dans le projet.
     textShadowColor: "black",
     textShadowRadius: 5,
   },
 
-  // Avis Styles
   ratingSummaryBox: {
     flexDirection: "row",
     alignItems: "center",
@@ -1647,7 +1573,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  // Footer Styles
   footer: {
     position: "absolute",
     bottom: 0,
@@ -1681,10 +1606,9 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 8,
   },
-  // Ajoute ça à la fin de tes styles
   modalContainer: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.9)", // Fond noir quasi opaque
+    backgroundColor: "rgba(0,0,0,0.9)",
     justifyContent: "center",
     alignItems: "center",
   },
