@@ -27,15 +27,23 @@ function getUserIdFromToken(req) {
 // =============================================================================
 
 exports.trackProductClick = async (req, res) => {
+  // ⚠️ LOG DE DEBUG
+  console.log('🔥🔥🔥 ROUTE TRACKING ATTEINTE 🔥🔥🔥');
+  console.log('🔥 Body reçu:', req.body);
+  console.log('🔥 Headers:', req.headers);
+
   const { product_id, session_id, device_type, referrer } = req.body;
 
   if (!product_id) {
+    console.log('❌ product_id manquant');
     return res.status(400).json({ message: 'product_id requis' });
   }
 
   const userId = getUserIdFromToken(req);
+  console.log('🔥 userId extrait:', userId);
 
   try {
+    console.log('🔥 Tentative INSERT...');
     const result = await db.query(
       `INSERT INTO user_product_clicks 
        (user_id, session_id, product_id, device_type, referrer, duration_seconds)
@@ -50,14 +58,19 @@ exports.trackProductClick = async (req, res) => {
       ]
     );
 
+    console.log('✅ INSERT OK, id:', result.rows[0].id);
+
     res.status(201).json({
       message: 'Clic enregistré',
       clickId: result.rows[0].id,
       userId: userId || null,
     });
   } catch (error) {
-    console.error('Erreur tracking clic:', error);
-    res.status(500).json({ message: 'Erreur serveur' });
+    console.error('❌❌❌ ERREUR TRACKING:', error);
+    console.error('❌ Message:', error.message);
+    console.error('❌ Code:', error.code);
+    console.error('❌ Stack:', error.stack);
+    res.status(500).json({ message: 'Erreur serveur', error: error.message });
   }
 };
 
