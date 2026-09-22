@@ -4,6 +4,7 @@ const router = express.Router();
 const db = require('../config/db');
 const authMiddleware = require('../middlewares/authMiddleware');
 const adminMiddleware = require('../middlewares/adminMiddleware');
+const trackingController = require('../controllers/trackingController');
 
 // =============================================================================
 // GET /api/admin/activity - Journal d'activité (ADMIN)
@@ -89,5 +90,11 @@ router.get('/activity/stats', authMiddleware, adminMiddleware, async (req, res) 
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
+
+// Tracking (admin)
+router.get('/tracking/top-products', authMiddleware, adminMiddleware, trackingController.getTopClickedProducts);
+router.get('/tracking/overview', authMiddleware, adminMiddleware, trackingController.getTrackingOverview);
+router.get('/tracking/user/:userId', authMiddleware, adminMiddleware, trackingController.getUserClicks);
+router.delete('/tracking/user/:userId', authMiddleware, adminMiddleware, trackingController.deleteUserClicks);
 
 module.exports = router;
