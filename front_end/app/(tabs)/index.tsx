@@ -16,7 +16,7 @@ import {
   TouchableOpacity,
   TextInput,
 } from "react-native";
-import { Alert } from "../../constants/Alerte"; // Alert.alert est inopérant sur le web — voir ce fichier
+import { Alert } from "../../constants/Alerte";
 import ScrollSection from "../../components/ScrollSection";
 import CategoryCard, {
   Category as CategoryType,
@@ -28,15 +28,10 @@ import Colors from "../../constants/Colors";
 import { useRouter, Href, Stack } from "expo-router";
 import { useAuth } from "../../context/AuthContext";
 import { Feather, Ionicons } from "@expo/vector-icons";
-import { API_BASE_URL } from "../../constants/Api"; // adresse du backend (locale ou prod) — voir ce fichier
+import { API_BASE_URL } from "../../constants/Api";
 
-// --- PRODUCTION (désactivé en local) : adresse désormais centralisée dans constants/Api.ts ---
-// const API_BASE_URL = "https://back-end-purple-log-1280.fly.dev/api";
 const { width } = Dimensions.get("window");
 
-// --- Largeur des ProductCard dans les carrousels horizontaux de l'accueil ---
-// (contexte différent de la grille 2 colonnes de [tag].tsx : ici on veut
-// une carte de taille fixe, assez large pour un scroll horizontal confortable)
 const HOME_PRODUCT_CARD_WIDTH = width * 0.42;
 
 interface TaggedProductsStore {
@@ -63,6 +58,9 @@ export default function TabAccueilScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [searchText, setSearchText] = useState("");
 
+  // 🎠 Carrousel : images dynamiques depuis l'API
+  const [carouselImages, setCarouselImages] = useState<string[]>([]);
+
   // Récupérer le nombre de notifications non lues
   useEffect(() => {
     if (user) {
@@ -74,23 +72,16 @@ export default function TabAccueilScreen() {
   const carouselRef = useRef<ScrollView>(null);
   const [carouselIndex, setCarouselIndex] = useState(0);
 
-  const carouselImages = [
-    "https://i.pinimg.com/1200x/c5/20/51/c52051b79281ee5b9c9c6f4701cd852f.jpg",
-    "https://i.pinimg.com/736x/ca/6e/82/ca6e826d10df23c7b65dc7f124353559.jpg",
-    "https://i.pinimg.com/736x/dc/73/2a/dc732ae5b28015fe0790ce89085a8b3b.jpg",
-    "https://i.pinimg.com/1200x/10/ea/52/10ea52e63e998beee7a5626b2080d503.jpg",
-    "https://i.pinimg.com/1200x/e9/7d/12/e97d12fb1f68210b03d2ed6a3b4a80d4.jpg",
-    "https://i.pinimg.com/736x/8a/78/b3/8a78b375f17fb3b1a11acecfd4b98b6d.jpg",
-  ];
-
   useEffect(() => {
+    if (carouselImages.length === 0) return;
+
     const interval = setInterval(() => {
       const next = (carouselIndex + 1) % carouselImages.length;
       carouselRef.current?.scrollTo({ x: next * width, animated: true });
       setCarouselIndex(next);
     }, 3500);
     return () => clearInterval(interval);
-  }, [carouselIndex]);
+  }, [carouselIndex, carouselImages.length]);
 
   const FEATURED_TAG_NAMES = [
     "Nouveauté",
@@ -104,6 +95,21 @@ export default function TabAccueilScreen() {
 
   const fetchData = useCallback(async () => {
     try {
+      // 🎠 Charger les bannières dynamiques depuis l'API
+      try {
+        const bannersRes = await fetch(`${API_BASE_URL}/banners`);
+        if (bannersRes.ok) {
+          const bannersData = await bannersRes.json();
+          const urls = (bannersData.banners || [])
+            .map((b: any) => b.image_url)
+            .filter(Boolean);
+          setCarouselImages(urls);
+          console.log(`🎠 ${urls.length} bannière(s) chargée(s) depuis l'API`);
+        }
+      } catch (bannerErr) {
+        console.warn('Erreur chargement bannières:', bannerErr);
+      }
+
       const catRes = await fetch(`${API_BASE_URL}/categories`);
       const catData = await catRes.json();
 
@@ -318,40 +324,42 @@ export default function TabAccueilScreen() {
         />
 
         {/* 🎠 CARROUSEL avec points de pagination */}
-        <View style={styles.carouselContainer}>
-          <ScrollView
-            ref={carouselRef}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            style={styles.carousel}
-            onMomentumScrollEnd={(e) => {
-              const newIndex = Math.round(
-                e.nativeEvent.contentOffset.x / width
-              );
-              setCarouselIndex(newIndex);
-            }}
-          >
-            {carouselImages.map((img, i) => (
-              <View key={i} style={styles.carouselSlide}>
-                <Image source={{ uri: img }} style={styles.carouselImage} resizeMode="cover" />
-              </View>
-            ))}
-          </ScrollView>
+        {carouselImages.length > 0 && (
+          <View style={styles.carouselContainer}>
+            <ScrollView
+              ref={carouselRef}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              style={styles.carousel}
+              onMomentumScrollEnd={(e) => {
+                const newIndex = Math.round(
+                  e.nativeEvent.contentOffset.x / width
+                );
+                setCarouselIndex(newIndex);
+              }}
+            >
+              {carouselImages.map((img, i) => (
+                <View key={i} style={styles.carouselSlide}>
+                  <Image source={{ uri: img }} style={styles.carouselImage} resizeMode="cover" />
+                </View>
+              ))}
+            </ScrollView>
 
-          {/* 🔘 Points de pagination */}
-          <View style={styles.dotsContainer}>
-            {carouselImages.map((_, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.dot,
-                  i === carouselIndex && styles.dotActive,
-                ]}
-              />
-            ))}
+            {/* 🔘 Points de pagination */}
+            <View style={styles.dotsContainer}>
+              {carouselImages.map((_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.dot,
+                    i === carouselIndex && styles.dotActive,
+                  ]}
+                />
+              ))}
+            </View>
           </View>
-        </View>
+        )}
 
         {featuredProductSections.map((section) => (
           <ScrollSection<ProductType>
@@ -389,8 +397,6 @@ export default function TabAccueilScreen() {
 }
 
 const styles = StyleSheet.create({
-  // Espacement entre les ProductCard dans les carrousels horizontaux
-  // (ProductCard n'a plus de marge interne, elle est gérée ici)
   productCardSpacing: {
     marginRight: 10,
   },
@@ -412,8 +418,6 @@ const styles = StyleSheet.create({
   notificationIcon: {
     padding: 4,
   },
-
-  // 🔔 Badge de notification
   badgeContainer: {
     position: "absolute",
     top: -4,
@@ -434,8 +438,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     textAlign: "center",
   },
-
-  // 🔍 Barre de recherche
   searchContainer: {
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -457,14 +459,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     paddingVertical: 6,
   },
-
-  // 🎠 Carrousel
   carouselContainer: {
     marginVertical: 15,
   },
-  carousel: {
-    // taille gérée par carouselSlide / carouselImage
-  },
+  carousel: {},
   carouselSlide: {
     width,
     paddingHorizontal: 16,
@@ -492,7 +490,6 @@ const styles = StyleSheet.create({
     width: 18,
     backgroundColor: "#FF6A00",
   },
-
   fabContainer: {
     position: "absolute",
     bottom: 25,
