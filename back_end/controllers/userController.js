@@ -1,20 +1,18 @@
 // ARTIVA/back_end/controllers/userController.js
 const db = require('../config/db');
-// bcrypt sera nécessaire si on permet à l'admin de réinitialiser un mot de passe (non recommandé directement)
-const bcrypt = require('bcryptjs'); 
+const bcrypt = require('bcryptjs');
 const { sendPasswordChangedEmail } = require("../utils/sendEmail.js");
 
 // --- Récupérer le profil de l'utilisateur actuellement connecté ---
 exports.getCurrentUserProfile = async (req, res) => {
-  // ... (ton code existant, qui fonctionne)
   try {
-    const userId = req.user.id; 
+    const userId = req.user.id;
     const userRole = req.user.role;
     let queryText;
-    if (userRole === 'admin' || userRole === 'super_admin') { // L'admin peut aussi voir son profil via cette route
-        queryText = 'SELECT id, name, email, role, created_at, updated_at FROM admin WHERE id = $1';
-    } else { 
-        queryText = 'SELECT id, name, email, address, phone, role, created_at, updated_at FROM users WHERE id = $1';
+    if (userRole === 'admin' || userRole === 'super_admin') {
+      queryText = 'SELECT id, name, email, role, created_at, updated_at FROM admin WHERE id = $1';
+    } else {
+      queryText = 'SELECT id, name, email, address, phone, role, created_at, updated_at FROM users WHERE id = $1';
     }
     const { rows } = await db.query(queryText, [userId]);
     if (rows.length === 0) return res.status(404).json({ message: 'Utilisateur non trouvé.' });
@@ -25,17 +23,18 @@ exports.getCurrentUserProfile = async (req, res) => {
   }
 };
 
-// --- NOUVEAU (Admin) : Lister tous les utilisateurs (clients) ---
+// --- (Admin) : Lister tous les utilisateurs ---
 exports.getAllUsers = async (req, res) => {
   try {
-    // Sélectionne uniquement les clients (ou tous les utilisateurs sauf les admins si tu les as dans la même table)
-    // Exclure les mots de passe hashés !
     const query = `
-      SELECT id, name, email, address, phone, role, created_at, updated_at 
+      SELECT 
+        id, name, email, address, phone, role, 
+        is_active, is_deleted,
+        blocked_reason, blocked_at,
+        created_at, updated_at, last_login_at
       FROM users 
-      ORDER BY created_at DESC; 
-      -- Tu pourrais ajouter une clause WHERE pour exclure certains rôles si nécessaire
-      -- WHERE role = 'customer' OR role = 'vendor' etc.
+      WHERE is_deleted = FALSE
+      ORDER BY created_at DESC;
     `;
     const { rows } = await db.query(query);
     res.status(200).json(rows);
@@ -45,12 +44,15 @@ exports.getAllUsers = async (req, res) => {
   }
 };
 
-// --- NOUVEAU (Admin) : Récupérer un utilisateur spécifique par son ID ---
+// --- (Admin) : Récupérer un utilisateur spécifique par son ID ---
 exports.getUserById = async (req, res) => {
   const { id } = req.params;
   try {
     const query = `
-      SELECT id, name, email, address, phone, role, created_at, updated_at 
+      SELECT 
+        id, name, email, address, phone, role, 
+        is_active, is_deleted, blocked_reason, blocked_at,
+        created_at, updated_at, last_login_at
       FROM users 
       WHERE id = $1;
     `;
@@ -65,13 +67,21 @@ exports.getUserById = async (req, res) => {
   }
 };
 
-// --- NOUVEAU (Admin) : Mettre à jour un utilisateur (ex: rôle, adresse, téléphone, is_active) ---
+// --- (Admin) : Mettre à jour un utilisateur ---
 exports.updateUserByAdmin = async (req, res) => {
-  const { id } = req.params; // ID de l'utilisateur à mettre à jour
-  const { name, email, address, phone, role, is_active } = req.body; // Champs modifiables par l'admin, y compris is_active
+  const { id } = req.params;
+  const { name, email, address, phone, role, is_active, blocked_reason } = req.body;
 
   // Validation : Au moins un champ doit être fourni pour la mise à jour
-  if (name === undefined && email === undefined && address === undefined && phone === undefined && role === undefined && is_active === undefined) {
+  if (
+    name === undefined &&
+    email === undefined &&
+    address === undefined &&
+    phone === undefined &&
+    role === undefined &&
+    is_active === undefined &&
+    blocked_reason === undefined
+  ) {
     return res.status(400).json({ message: 'Aucun champ fourni pour la mise à jour.' });
   }
 
@@ -84,41 +94,57 @@ exports.updateUserByAdmin = async (req, res) => {
   if (email !== undefined) { fieldsToUpdate.push(`email = $${paramIndex++}`); values.push(email); }
   if (address !== undefined) { fieldsToUpdate.push(`address = $${paramIndex++}`); values.push(address); }
   if (phone !== undefined) { fieldsToUpdate.push(`phone = $${paramIndex++}`); values.push(phone); }
-  if (role !== undefined) { 
-    // Valider le rôle si tu as une liste de rôles permis
-    if (!['customer', 'vendor', /* autres rôles valides */].includes(role)) {
-        return res.status(400).json({ message: 'Rôle utilisateur invalide.' });
+  if (role !== undefined) {
+    if (!['customer', 'vendor'].includes(role)) {
+      return res.status(400).json({ message: 'Rôle utilisateur invalide.' });
     }
-    fieldsToUpdate.push(`role = $${paramIndex++}`); values.push(role); 
-  }
-  // Ajout : Gérer le champ is_active
-  if (is_active !== undefined) {
-    fieldsToUpdate.push(`is_active = $${paramIndex++}`);
-    values.push(is_active); // Pas de validation ici, on suppose que c'est un booléen
+    fieldsToUpdate.push(`role = $${paramIndex++}`); values.push(role);
   }
 
-  if (fieldsToUpdate.length === 0) { // Devrait être attrapé par la validation précédente, mais par sécurité
+  // Gérer le champ is_active + blocked_reason + blocked_at
+  if (is_active !== undefined) {
+    fieldsToUpdate.push(`is_active = $${paramIndex++}`);
+    values.push(is_active);
+
+    if (is_active === false) {
+      // Blocage : enregistrer la raison + la date
+      fieldsToUpdate.push(`blocked_reason = $${paramIndex++}`);
+      values.push(blocked_reason || 'Bloqué par admin');
+
+      fieldsToUpdate.push(`blocked_at = $${paramIndex++}`);
+      values.push(new Date());
+    } else if (is_active === true) {
+      // Déblocage : nettoyer les champs de blocage
+      fieldsToUpdate.push(`blocked_reason = $${paramIndex++}`);
+      values.push(null);
+
+      fieldsToUpdate.push(`blocked_at = $${paramIndex++}`);
+      values.push(null);
+    }
+  }
+
+  if (fieldsToUpdate.length === 0) {
     return res.status(400).json({ message: 'Aucun champ valide fourni pour la mise à jour.' });
   }
 
-  fieldsToUpdate.push(`updated_at = CURRENT_TIMESTAMP`); // Toujours mettre à jour updated_at
+  fieldsToUpdate.push(`updated_at = CURRENT_TIMESTAMP`);
 
   const updateQuery = `
     UPDATE users 
     SET ${fieldsToUpdate.join(', ')} 
     WHERE id = $${paramIndex}
-    RETURNING id, name, email, address, phone, role, is_active, created_at, updated_at;
+    RETURNING id, name, email, address, phone, role, is_active, 
+              blocked_reason, blocked_at, created_at, updated_at;
   `;
   values.push(id);
 
   try {
-    // Vérifier si l'email (s'il est modifié) n'est pas déjà pris par un AUTRE utilisateur
     if (email !== undefined) {
-        const emailCheckQuery = 'SELECT id FROM users WHERE email = $1 AND id != $2';
-        const emailCheckResult = await db.query(emailCheckQuery, [email, id]);
-        if (emailCheckResult.rows.length > 0) {
-            return res.status(409).json({ message: 'Cet email est déjà utilisé par un autre compte.' });
-        }
+      const emailCheckQuery = 'SELECT id FROM users WHERE email = $1 AND id != $2';
+      const emailCheckResult = await db.query(emailCheckQuery, [email, id]);
+      if (emailCheckResult.rows.length > 0) {
+        return res.status(409).json({ message: 'Cet email est déjà utilisé par un autre compte.' });
+      }
     }
 
     const { rows } = await db.query(updateQuery, values);
@@ -128,20 +154,14 @@ exports.updateUserByAdmin = async (req, res) => {
     res.status(200).json({ message: 'Utilisateur mis à jour avec succès!', user: rows[0] });
   } catch (error) {
     console.error(`Erreur lors de la mise à jour de l'utilisateur ${id}:`, error);
-    if (error.code === '23505') { // Conflit d'unicité (probablement email)
-        return res.status(409).json({ message: 'Conflit de données (ex: email déjà existant).', detail: error.detail });
+    if (error.code === '23505') {
+      return res.status(409).json({ message: 'Conflit de données (ex: email déjà existant).', detail: error.detail });
     }
     res.status(500).json({ message: 'Erreur serveur lors de la mise à jour de l\'utilisateur.' });
   }
 };
 
-// --- NOUVEAU (Admin) : Supprimer un utilisateur (CLIENT) ---
-// Attention: Réfléchis bien aux implications (commandes associées, etc.)
-// ON DELETE SET NULL sur user_id dans orders est une bonne approche.
-// --- (Admin) : Supprimer DÉFINITIVEMENT un utilisateur (CLIENT) ---
-// Refusé si l'utilisateur a des commandes : la suppression casserait
-// l'historique (comptabilité, stats, litiges). Utiliser l'anonymisation
-// dans ce cas — voir anonymizeUserByAdmin ci-dessous.
+// --- (Admin) : Supprimer définitivement un utilisateur ---
 exports.deleteUserByAdmin = async (req, res) => {
   const { id } = req.params;
   try {
@@ -171,10 +191,7 @@ exports.deleteUserByAdmin = async (req, res) => {
   }
 };
 
-// --- (Admin) : Anonymiser un utilisateur (supprime son identité, garde ses données) ---
-// Le compte devient inutilisable (email placeholder, mot de passe vidé,
-// is_active = FALSE) mais orders/order_items/avis restent liés à son id :
-// l'historique de vente et les stats ne bougent pas.
+// --- (Admin) : Anonymiser un utilisateur ---
 exports.anonymizeUserByAdmin = async (req, res) => {
   const { id } = req.params;
   try {
@@ -215,14 +232,12 @@ exports.anonymizeUserByAdmin = async (req, res) => {
     res.status(500).json({ message: 'Erreur serveur lors de l\'anonymisation.' });
   }
 };
-// NOUVEAU : Mettre à jour le profil de l'utilisateur actuellement connecté (CLIENT)
-exports.updateMyProfile = async (req, res) => {
-  const userId = req.user.id; // De authMiddleware
-  const { name, address, phone, current_password, new_password } = req.body; 
-  // On pourrait aussi permettre de changer l'email, mais c'est plus sensible (vérification)
 
-  // Champs modifiables par l'utilisateur lui-même.
-  // Ne pas permettre de changer le rôle ici.
+// --- Mettre à jour le profil de l'utilisateur connecté (CLIENT) ---
+exports.updateMyProfile = async (req, res) => {
+  const userId = req.user.id;
+  const { name, address, phone, current_password, new_password } = req.body;
+
   const fieldsToUpdate = [];
   const values = [];
   let paramIndex = 1;
@@ -231,7 +246,6 @@ exports.updateMyProfile = async (req, res) => {
   if (address !== undefined) { fieldsToUpdate.push(`address = $${paramIndex++}`); values.push(address.trim() === '' ? null : address); }
   if (phone !== undefined) { fieldsToUpdate.push(`phone = $${paramIndex++}`); values.push(phone.trim() === '' ? null : phone); }
 
-  // Logique de changement de mot de passe (optionnel ici, peut être une route dédiée)
   if (new_password && current_password) {
     try {
       const userResult = await db.query('SELECT password_hash FROM users WHERE id = $1', [userId]);
@@ -243,19 +257,17 @@ exports.updateMyProfile = async (req, res) => {
       if (!isPasswordMatch) {
         return res.status(401).json({ message: 'Mot de passe actuel incorrect.' });
       }
-      // Valider la force du nouveau mot de passe ici si besoin
       const saltRounds = parseInt(process.env.PASSWORD_SALT_ROUNDS || '10');
       const hashedNewPassword = await bcrypt.hash(new_password, saltRounds);
       fieldsToUpdate.push(`password_hash = $${paramIndex++}`);
       values.push(hashedNewPassword);
     } catch (bcryptError) {
-        console.error("Erreur bcrypt changement mot de passe:", bcryptError);
-        return res.status(500).json({ message: 'Erreur lors de la mise à jour du mot de passe.' });
+      console.error("Erreur bcrypt changement mot de passe:", bcryptError);
+      return res.status(500).json({ message: 'Erreur lors de la mise à jour du mot de passe.' });
     }
   } else if (new_password && !current_password) {
     return res.status(400).json({ message: 'Le mot de passe actuel est requis pour définir un nouveau mot de passe.' });
   }
-
 
   if (fieldsToUpdate.length === 0) {
     return res.status(400).json({ message: 'Aucun champ fourni pour la mise à jour.' });
@@ -272,12 +284,10 @@ exports.updateMyProfile = async (req, res) => {
   values.push(userId);
 
   try {
-    // Si l'email est modifiable, ajouter la vérification d'unicité ici
     const { rows } = await db.query(updateQuery, values);
-    if (rows.length === 0) { // Ne devrait pas arriver si le token est valide
+    if (rows.length === 0) {
       return res.status(404).json({ message: 'Utilisateur non trouvé pour la mise à jour.' });
     }
-    // Renvoyer l'utilisateur mis à jour (sans le hash du mot de passe)
     const { password_hash, ...updatedUser } = rows[0];
     res.status(200).json({ message: 'Profil mis à jour avec succès!', user: updatedUser });
   } catch (error) {
@@ -286,17 +296,17 @@ exports.updateMyProfile = async (req, res) => {
   }
 };
 
+// --- Désactiver son propre compte ---
 exports.deactivateMyAccount = async (req, res) => {
-  const userId = req.user.id; // Récupéré du token JWT
-  console.log(`Backend: Tentative de désactivation pour userId: ${userId}`); // LOG
+  const userId = req.user.id;
+  console.log(`Backend: Tentative de désactivation pour userId: ${userId}`);
 
   try {
-    // S'assurer que la table 'users' a 'is_active' et 'updated_at'
     const updateQuery = `
       UPDATE users 
       SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP 
       WHERE id = $1 AND is_active = TRUE 
-      RETURNING id, name, email, is_active;`; // Retourner plus d'infos peut être utile
+      RETURNING id, name, email, is_active;`;
       
     const result = await db.query(updateQuery, [userId]);
 
@@ -312,15 +322,16 @@ exports.deactivateMyAccount = async (req, res) => {
     
     console.log(`Backend: Compte userId: ${userId} désactivé avec succès. Utilisateur retourné:`, result.rows[0]);
     res.status(200).json({ 
-        message: 'Votre compte a été désactivé avec succès. Vous allez être déconnecté.',
-        user: result.rows[0] 
+      message: 'Votre compte a été désactivé avec succès. Vous allez être déconnecté.',
+      user: result.rows[0] 
     });
   } catch (error) {
     console.error(`Backend: Erreur désactivation compte utilisateur ${userId}:`, error);
     res.status(500).json({ message: 'Erreur serveur lors de la désactivation du compte.' });
   }
 };
-// AJOUTER CETTE FONCTION DANS userController.js si elle manque :
+
+// --- Changer son propre mot de passe ---
 exports.changePassword = async (req, res) => {
   const userId = req.user.id;
   const userRole = req.user.role;
@@ -343,8 +354,6 @@ exports.changePassword = async (req, res) => {
   const tableName = userRole === 'admin' || userRole === 'super_admin' ? 'admin' : 'users';
 
   try {
-    // On récupère aussi email/name ici pour l'email de confirmation, sans
-    // requête supplémentaire.
     const userResult = await db.query(
       `SELECT id, password_hash, email, name FROM ${tableName} WHERE id = $1`,
       [userId]
@@ -371,8 +380,6 @@ exports.changePassword = async (req, res) => {
 
     res.status(200).json({ message: 'Mot de passe mis à jour avec succès !' });
 
-    // Envoyé APRÈS la réponse : l'utilisateur n'attend pas l'email pour avoir
-    // confirmation que son changement a réussi.
     try {
       if (userRecord.email) {
         await sendPasswordChangedEmail(userRecord.email, userRecord.name);
@@ -400,7 +407,6 @@ exports.saveFcmToken = async (req, res) => {
   }
 
   try {
-    // Mettre à jour le token FCM de l'utilisateur
     const result = await db.query(
       `UPDATE users 
        SET fcm_token = $1, 
