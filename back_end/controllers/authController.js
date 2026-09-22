@@ -314,6 +314,20 @@ const loginUser = async (req, res) => {
     if (!isMatch)
       return res.status(401).json({ message: "Email ou mot de passe incorrect" });
 
+    // ✅ NOUVEAU : Vérification compte supprimé / bloqué AVANT l'envoi du code 2FA
+    if (user.is_deleted) {
+      return res.status(403).json({
+        message: "Ce compte a été supprimé. Contactez le support.",
+        code: "ACCOUNT_DELETED",
+      });
+    }
+    if (user.is_active === false) {
+      return res.status(403).json({
+        message: "Votre compte a été bloqué. Contactez le support pour plus d'informations.",
+        code: "ACCOUNT_BLOCKED",
+      });
+    }
+
     const code = generateCode();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
@@ -340,14 +354,30 @@ const verifyLoginCode = async (req, res) => {
     return res.status(400).json({ message: "Email et code requis" });
 
   try {
+    // ✅ NOUVEAU : on ajoute is_active et is_deleted dans le SELECT
     const userResult = await db.query(
-      "SELECT id, email, name, role, last_login_at FROM users WHERE email=$1",
+      "SELECT id, email, name, role, last_login_at, is_active, is_deleted FROM users WHERE email=$1",
       [email]
     );
     if (userResult.rows.length === 0)
       return res.status(404).json({ message: "Utilisateur introuvable" });
 
     const user = userResult.rows[0];
+
+    // ✅ NOUVEAU : Sécurité — vérifier que le compte est toujours actif (au cas où il aurait été bloqué entre les 2 étapes)
+    if (user.is_deleted) {
+      return res.status(403).json({
+        message: "Ce compte a été supprimé.",
+        code: "ACCOUNT_DELETED",
+      });
+    }
+    if (user.is_active === false) {
+      return res.status(403).json({
+        message: "Votre compte a été bloqué.",
+        code: "ACCOUNT_BLOCKED",
+      });
+    }
+
     const codeClean = code.toString().trim();
 
     const codeResult = await db.query(
@@ -428,8 +458,9 @@ const googleAuth = async (req, res) => {
   }
 
   try {
+    // ✅ NOUVEAU : ajout de is_deleted dans le SELECT
     let userResult = await db.query(
-      `SELECT id, name, email, role, picture, google_id, is_active, created_at, last_login_at 
+      `SELECT id, name, email, role, picture, google_id, is_active, is_deleted, created_at, last_login_at 
        FROM users 
        WHERE email = $1 OR google_id = $2`,
       [email, googleId]
@@ -474,7 +505,24 @@ const googleAuth = async (req, res) => {
       }
 
     } else {
-      isFirstLogin = !userResult.rows[0].last_login_at;
+      // ✅ NOUVEAU : Vérifier compte supprimé / bloqué AVANT de mettre à jour
+      const existingUser = userResult.rows[0];
+      if (existingUser.is_deleted) {
+        return res.status(403).json({
+          success: false,
+          message: "Ce compte a été supprimé. Contactez le support.",
+          code: "ACCOUNT_DELETED",
+        });
+      }
+      if (existingUser.is_active === false) {
+        return res.status(403).json({
+          success: false,
+          message: "Votre compte a été bloqué. Contactez le support pour plus d'informations.",
+          code: "ACCOUNT_BLOCKED",
+        });
+      }
+
+      isFirstLogin = !existingUser.last_login_at;
 
       const updateResult = await db.query(
         `UPDATE users 
@@ -484,7 +532,7 @@ const googleAuth = async (req, res) => {
            updated_at = NOW()
          WHERE id = $3
          RETURNING id, name, email, role, picture, google_id, is_active, created_at, last_login_at`,
-        [googleId, picture || null, userResult.rows[0].id]
+        [googleId, picture || null, existingUser.id]
       );
       user = updateResult.rows[0];
       console.log(`[Google Auth] Utilisateur existant mis à jour: ${email} (1ère connexion: ${isFirstLogin})`);
