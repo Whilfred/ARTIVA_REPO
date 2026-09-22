@@ -20,6 +20,7 @@ const avisRouter = require('./routes/avis');
 const campaignRoutes = require('./routes/campaignRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const trackingRoutes = require('./routes/trackingRoutes');
+const bannerRoutes = require('./routes/bannerRoutes');
 
 const app = express();
 
@@ -27,6 +28,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/api/tracking', trackingRoutes);
+app.use('/api/banners', bannerRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'Bienvenue sur l\'API Artiva !' });

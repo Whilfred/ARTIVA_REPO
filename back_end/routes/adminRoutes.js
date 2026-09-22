@@ -5,6 +5,7 @@ const db = require('../config/db');
 const authMiddleware = require('../middlewares/authMiddleware');
 const adminMiddleware = require('../middlewares/adminMiddleware');
 const trackingController = require('../controllers/trackingController');
+const bannerController = require('../controllers/bannerController');
 
 // =============================================================================
 // GET /api/admin/activity - Journal d'activité (ADMIN)
@@ -96,5 +97,10 @@ router.get('/tracking/top-products', authMiddleware, adminMiddleware, trackingCo
 router.get('/tracking/overview', authMiddleware, adminMiddleware, trackingController.getTrackingOverview);
 router.get('/tracking/user/:userId', authMiddleware, adminMiddleware, trackingController.getUserClicks);
 router.delete('/tracking/user/:userId', authMiddleware, adminMiddleware, trackingController.deleteUserClicks);
+// Banners (admin)
+router.get('/banners', authMiddleware, adminMiddleware, bannerController.getAllBanners);
+router.post('/banners', authMiddleware, adminMiddleware, bannerController.createBanner);
+router.put('/banners/:id', authMiddleware, adminMiddleware, bannerController.updateBanner);
+router.delete('/banners/:id', authMiddleware, adminMiddleware, bannerController.deleteBanner);
 
 module.exports = router;
