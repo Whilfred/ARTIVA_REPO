@@ -1176,6 +1176,64 @@ const sendCartReminderEmail = async (to, name, { items, totalAmount, totalItems 
 };
 
 // =============================================================================
+// EMAIL : Compte bloqué par l'admin
+// =============================================================================
+
+const sendAccountBlockedEmail = async (to, name, reason) => {
+  const safeReason = reason && reason.trim() ? reason.trim() : "Non précisée";
+
+  const htmlContent = carteEmail({
+    titre: "🚫 Votre compte a été suspendu",
+    couleur: "#c0392b",
+    corps: `
+      <p style="font-size:16px;">
+        Bonjour ${name || "Cher client"},
+      </p>
+      <p style="font-size:15px;">
+        Nous vous informons que votre compte Artiva a été <b>suspendu</b> par notre équipe.
+      </p>
+      <div style="
+        background:#fef2f2;
+        border-left:4px solid #c0392b;
+        padding:14px 18px;
+        margin:20px 0;
+        border-radius:6px;
+      ">
+        <p style="margin:0 0 6px 0; font-size:12px; color:#991b1b; text-transform:uppercase; letter-spacing:0.5px; font-weight:bold;">
+          Raison du blocage
+        </p>
+        <p style="margin:0; font-size:15px; color:#7f1d1d; font-style:italic;">
+          ${safeReason}
+        </p>
+      </div>
+      <p style="font-size:15px;">
+        Vous ne pouvez plus vous connecter à votre compte pour le moment.
+      </p>
+      <p style="font-size:15px;">
+        Si vous pensez qu'il s'agit d'une erreur ou si vous souhaitez faire appel
+        de cette décision, contactez-nous en répondant à cet email.
+      </p>
+      <p style="font-size:14px; color:#666; margin-top:20px;">
+        Cordialement,<br/>
+        <b>L'équipe Artiva</b>
+      </p>
+    `,
+    pied: "L'équipe Artiva — Notification de compte",
+  });
+
+  await sendMailWithLog(
+    {
+      fromName: "Artiva 🚫",
+      fromEmail: "artiva.app@gmail.com",
+      to,
+      subject: "🚫 Votre compte Artiva a été suspendu",
+      html: htmlContent,
+    },
+    "Account-Blocked"
+  );
+};
+
+// =============================================================================
 // EXPORTS
 // =============================================================================
 
@@ -1283,5 +1341,5 @@ module.exports = {
   sendWishlistReminderEmail,
   sendCartReminderEmail,
   sendActivityBatchEmail,
-
+  sendAccountBlockedEmail,
 };

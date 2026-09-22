@@ -1,7 +1,7 @@
 // ARTIVA/back_end/controllers/userController.js
 const db = require('../config/db');
 const bcrypt = require('bcryptjs');
-const { sendPasswordChangedEmail } = require("../utils/sendEmail.js");
+const { sendPasswordChangedEmail, sendAccountBlockedEmail } = require("../utils/sendEmail.js");
 
 // --- Récupérer le profil de l'utilisateur actuellement connecté ---
 exports.getCurrentUserProfile = async (req, res) => {
@@ -151,7 +151,26 @@ exports.updateUserByAdmin = async (req, res) => {
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Utilisateur non trouvé pour la mise à jour.' });
     }
-    res.status(200).json({ message: 'Utilisateur mis à jour avec succès!', user: rows[0] });
+
+    const updatedUser = rows[0];
+
+    // ✅ NOUVEAU : si l'admin vient de bloquer, envoyer un email d'information
+    const isBeingBlocked = is_active === false;
+    if (isBeingBlocked && updatedUser.email) {
+      setImmediate(async () => {
+        try {
+          await sendAccountBlockedEmail(
+            updatedUser.email,
+            updatedUser.name,
+            updatedUser.blocked_reason
+          );
+        } catch (emailError) {
+          console.error(`❌ Erreur email blocage à ${updatedUser.email}:`, emailError.message);
+        }
+      });
+    }
+
+    res.status(200).json({ message: 'Utilisateur mis à jour avec succès!', user: updatedUser });
   } catch (error) {
     console.error(`Erreur lors de la mise à jour de l'utilisateur ${id}:`, error);
     if (error.code === '23505') {
