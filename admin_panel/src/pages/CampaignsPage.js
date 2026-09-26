@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
 import CampaignFormModal from '../components/CampaignFormModal';
+import CampaignDetailsModal from '../components/CampaignDetailsModal';
 import { API_BASE_URL } from '../config';
 import './ProductManagementPage.css';
 
@@ -18,12 +19,19 @@ function CampaignsPage() {
   const [campaigns, setCampaigns] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Modale création / édition
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [campaignToEdit, setCampaignToEdit] = useState(null);   // ← NOUVEAU
+  const [campaignToEdit, setCampaignToEdit] = useState(null);
+
+  // Modale détails (lecture)
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [detailsCampaignId, setDetailsCampaignId] = useState(null);
 
   const adminToken = localStorage.getItem('adminToken');
   const navigate = useNavigate();
 
+  // ---------- Chargement ----------
   const fetchCampaigns = useCallback(async () => {
     if (!adminToken) {
       navigate('/login');
@@ -48,6 +56,7 @@ function CampaignsPage() {
     fetchCampaigns();
   }, [fetchCampaigns]);
 
+  // Auto-refresh tant qu'une campagne est en cours d'envoi
   useEffect(() => {
     const enCours = campaigns.some((c) => c.status === 'sending');
     if (!enCours) return;
@@ -55,15 +64,14 @@ function CampaignsPage() {
     return () => clearInterval(interval);
   }, [campaigns, fetchCampaigns]);
 
-  // ---------- Ouvrir la modale (création ou édition) ----------
+  // ---------- Création ----------
   const handleOpenCreate = () => {
     setCampaignToEdit(null);
     setIsModalOpen(true);
   };
 
+  // ---------- Édition ----------
   const handleOpenEdit = async (campaign) => {
-    // On doit charger les détails complets (target_filter, manual_user_ids…)
-    // car la liste ne renvoie pas tout.
     try {
       const res = await axios.get(`${API_BASE_URL}/campaigns/${campaign.id}`, {
         headers: { Authorization: `Bearer ${adminToken}` },
@@ -81,12 +89,26 @@ function CampaignsPage() {
     setCampaignToEdit(null);
   };
 
+  // ---------- Détails (lecture) ----------
+  const handleOpenDetails = (campaign) => {
+    setDetailsCampaignId(campaign.id);
+    setIsDetailsModalOpen(true);
+  };
+
+  const handleCloseDetails = () => {
+    setIsDetailsModalOpen(false);
+    setDetailsCampaignId(null);
+  };
+
+  // ---------- Envoi immédiat ----------
   const handleSendNow = async (id) => {
     if (!window.confirm('Envoyer cette campagne maintenant ?')) return;
     try {
-      await axios.post(`${API_BASE_URL}/campaigns/${id}/send`, {}, {
-        headers: { Authorization: `Bearer ${adminToken}` },
-      });
+      await axios.post(
+        `${API_BASE_URL}/campaigns/${id}/send`,
+        {},
+        { headers: { Authorization: `Bearer ${adminToken}` } }
+      );
       fetchCampaigns();
     } catch (err) {
       console.error('Erreur envoi campagne:', err);
@@ -94,6 +116,7 @@ function CampaignsPage() {
     }
   };
 
+  // ---------- Suppression ----------
   const handleDelete = async (id) => {
     if (!window.confirm('Supprimer cette campagne (brouillon ou programmation) ?')) return;
     try {
@@ -111,7 +134,9 @@ function CampaignsPage() {
     <div className="management-page">
       <div className="page-header">
         <h1>Campagnes Email</h1>
-        <button className="add-product-btn" onClick={handleOpenCreate}>+ Nouvelle campagne</button>
+        <button className="add-product-btn" onClick={handleOpenCreate}>
+          + Nouvelle campagne
+        </button>
       </div>
       <Link to="/dashboard" className="back-link">← Retour au Tableau de Bord</Link>
 
@@ -138,7 +163,11 @@ function CampaignsPage() {
               return (
                 <tr key={c.id}>
                   <td>{c.subject}</td>
-                  <td><span style={{ color: statut.color, fontWeight: 'bold' }}>{statut.label}</span></td>
+                  <td>
+                    <span style={{ color: statut.color, fontWeight: 'bold' }}>
+                      {statut.label}
+                    </span>
+                  </td>
                   <td>{c.total_destinataires}</td>
                   <td>{c.envoyes} / {c.echoues}</td>
                   <td>
@@ -147,6 +176,14 @@ function CampaignsPage() {
                     {c.status === 'draft' && '-'}
                   </td>
                   <td className="actions-cell">
+                    <button
+                      onClick={() => handleOpenDetails(c)}
+                      className="action-btn"
+                      title="Voir détails"
+                    >
+                      👁️
+                    </button>
+
                     {canEdit && (
                       <>
                         <button
@@ -176,12 +213,17 @@ function CampaignsPage() {
                 </tr>
               );
             }) : (
-              <tr><td colSpan="6" style={{ textAlign: 'center' }}>Aucune campagne pour le moment.</td></tr>
+              <tr>
+                <td colSpan="6" style={{ textAlign: 'center' }}>
+                  Aucune campagne pour le moment.
+                </td>
+              </tr>
             )}
           </tbody>
         </table>
       </div>
 
+      {/* Modale création / édition */}
       {isModalOpen && (
         <CampaignFormModal
           isOpen={isModalOpen}
@@ -192,6 +234,15 @@ function CampaignsPage() {
           campaignToEdit={campaignToEdit}
         />
       )}
+
+      {/* Modale détails (lecture) */}
+      <CampaignDetailsModal
+        isOpen={isDetailsModalOpen}
+        onClose={handleCloseDetails}
+        campaignId={detailsCampaignId}
+        apiBaseUrl={API_BASE_URL}
+        adminToken={adminToken}
+      />
     </div>
   );
 }
