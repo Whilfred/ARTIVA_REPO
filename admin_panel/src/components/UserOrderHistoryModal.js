@@ -14,7 +14,14 @@ const STATUS_LABELS = {
   failed:            { label: 'Échouée',          color: '#991b1b', bg: '#fee2e2' },
 };
 
-function UserOrderHistoryModal({ isOpen, onClose, user, apiBaseUrl, adminToken, onOpenOrderDetails }) {
+function UserOrderHistoryModal({
+  isOpen,
+  onClose,
+  user,
+  apiBaseUrl,
+  adminToken,
+  onOpenOrderDetails,
+}) {
   const [orders, setOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -53,7 +60,7 @@ function UserOrderHistoryModal({ isOpen, onClose, user, apiBaseUrl, adminToken, 
   const totalOrders = orders.length;
   const paidCount = paidOrders.length;
   const averageOrder = paidCount > 0 ? totalSpent / paidCount : 0;
-  const lastOrder = orders[0]; // déjà trié DESC par le backend
+  const lastOrder = orders[0];
 
   // ---------- Utilitaires ----------
   const formatDate = (dateString) => {
@@ -72,7 +79,11 @@ function UserOrderHistoryModal({ isOpen, onClose, user, apiBaseUrl, adminToken, 
   const formatMoney = (n) => `${Number(n || 0).toLocaleString('fr-FR')} F`;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div
+      className="modal-overlay"
+      onClick={onClose}
+      style={{ zIndex: 999 }}
+    >
       <div
         className="modal-content"
         onClick={(e) => e.stopPropagation()}
@@ -174,8 +185,9 @@ function UserOrderHistoryModal({ isOpen, onClose, user, apiBaseUrl, adminToken, 
                               className="action-btn edit-btn"
                               title="Voir détails"
                               onClick={() => {
-                                onClose();
-                                if (onOpenOrderDetails) onOpenOrderDetails(order.orderId);
+                                if (onOpenOrderDetails) {
+                                  onOpenOrderDetails(order.orderId);
+                                }
                               }}
                             >
                               👁️
@@ -202,7 +214,7 @@ function UserOrderHistoryModal({ isOpen, onClose, user, apiBaseUrl, adminToken, 
   );
 }
 
-// ---------- Petite carte de stat ----------
+// ---------- Carte de stat ----------
 function StatCard({ label, value, sublabel, highlight }) {
   return (
     <div style={{
@@ -211,10 +223,21 @@ function StatCard({ label, value, sublabel, highlight }) {
       border: `1px solid ${highlight ? '#c7d2fe' : '#e5e7eb'}`,
       borderRadius: '10px',
     }}>
-      <div style={{ fontSize: '0.78rem', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>
+      <div style={{
+        fontSize: '0.78rem',
+        color: '#6b7280',
+        textTransform: 'uppercase',
+        letterSpacing: '0.5px',
+        fontWeight: 600,
+      }}>
         {label}
       </div>
-      <div style={{ fontSize: '1.4rem', fontWeight: 700, color: highlight ? '#3730a3' : '#111827', marginTop: '4px' }}>
+      <div style={{
+        fontSize: '1.4rem',
+        fontWeight: 700,
+        color: highlight ? '#3730a3' : '#111827',
+        marginTop: '4px',
+      }}>
         {value}
       </div>
       {sublabel && (

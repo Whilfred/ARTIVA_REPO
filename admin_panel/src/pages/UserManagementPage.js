@@ -6,6 +6,7 @@ import UserFormModal from '../components/UserFormModal';
 import UserDetailsModal from '../components/UserDetailsModal';
 import BlockUserModal from '../components/BlockUserModal';
 import UserOrderHistoryModal from '../components/UserOrderHistoryModal';
+import OrderDetailsModal from '../components/OrderDetailsModal';
 import { API_BASE_URL } from '../config';
 import './ProductManagementPage.css';
 
@@ -27,9 +28,13 @@ function UserManagementPage() {
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [historyUser, setHistoryUser] = useState(null);
 
+  // --- Détails d'une commande (ouvert depuis la modale historique) ---
+  const [isOrderDetailsModalOpen, setIsOrderDetailsModalOpen] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState(null);
+
   // --- Recherche + filtre ---
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all'); // all | active | blocked | anonymized
+  const [statusFilter, setStatusFilter] = useState('all');
 
   const adminToken = localStorage.getItem('adminToken');
   const navigate = useNavigate();
@@ -105,7 +110,7 @@ function UserManagementPage() {
     setError('');
   };
 
-  // ---------- Modale détails ----------
+  // ---------- Modale détails user (panier & wishlist) ----------
   const handleOpenDetails = (user) => {
     setDetailsUser(user);
     setIsDetailsModalOpen(true);
@@ -123,6 +128,16 @@ function UserManagementPage() {
   const handleCloseHistory = () => {
     setIsHistoryModalOpen(false);
     setHistoryUser(null);
+  };
+
+  // ---------- Modale détails d'une commande (depuis historique) ----------
+  const handleOpenOrderDetails = (orderId) => {
+    setSelectedOrderId(orderId);
+    setIsOrderDetailsModalOpen(true);
+  };
+  const handleCloseOrderDetails = () => {
+    setIsOrderDetailsModalOpen(false);
+    setSelectedOrderId(null);
   };
 
   const handleSaveUser = (updatedUser) => {
@@ -501,7 +516,19 @@ function UserManagementPage() {
         user={historyUser}
         apiBaseUrl={API_BASE_URL}
         adminToken={adminToken}
+        onOpenOrderDetails={handleOpenOrderDetails}
       />
+
+      {/* Modale détails commande — s'ouvre PAR-DESSUS la modale historique */}
+      {isOrderDetailsModalOpen && selectedOrderId && (
+        <OrderDetailsModal
+          isOpen={isOrderDetailsModalOpen}
+          onClose={handleCloseOrderDetails}
+          orderId={selectedOrderId}
+          apiBaseUrl={API_BASE_URL}
+          adminToken={adminToken}
+        />
+      )}
     </div>
   );
 }
