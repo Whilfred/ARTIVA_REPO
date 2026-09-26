@@ -8,7 +8,7 @@ import BlockUserModal from '../components/BlockUserModal';
 import UserOrderHistoryModal from '../components/UserOrderHistoryModal';
 import OrderDetailsModal from '../components/OrderDetailsModal';
 import { API_BASE_URL } from '../config';
-import './ProductManagementPage.css';
+import './UserManagementPage.css';
 
 function UserManagementPage() {
   const [users, setUsers] = useState([]);
@@ -24,17 +24,17 @@ function UserManagementPage() {
   const [isBlockModalOpen, setIsBlockModalOpen] = useState(false);
   const [blockTarget, setBlockTarget] = useState(null);
 
-  // --- Historique des commandes ---
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [historyUser, setHistoryUser] = useState(null);
 
-  // --- Détails d'une commande (ouvert depuis la modale historique) ---
   const [isOrderDetailsModalOpen, setIsOrderDetailsModalOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState(null);
 
-  // --- Recherche + filtre ---
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+
+  // Menu d'actions ouvert (par user id) — géré en state pour ne pas avoir mille boutons visibles
+  const [openMenuId, setOpenMenuId] = useState(null);
 
   const adminToken = localStorage.getItem('adminToken');
   const navigate = useNavigate();
@@ -65,10 +65,16 @@ function UserManagementPage() {
     fetchUsers();
   }, [fetchUsers]);
 
-  // ---------- Filtrage côté client ----------
+  // Fermer le menu si on clique ailleurs
+  useEffect(() => {
+    const close = () => setOpenMenuId(null);
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, []);
+
+  // ---------- Filtrage ----------
   const filteredUsers = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-
     return users.filter((user) => {
       const isBlocked = !user.is_active && !user.is_deleted;
       const isAnonymized = user.is_deleted;
@@ -86,9 +92,7 @@ function UserManagementPage() {
         user.phone || '',
         user.address || '',
         user.role || '',
-      ]
-        .join(' ')
-        .toLowerCase();
+      ].join(' ').toLowerCase();
 
       return haystack.includes(term);
     });
@@ -99,59 +103,24 @@ function UserManagementPage() {
     setStatusFilter('all');
   };
 
-  // ---------- Modale édition ----------
-  const handleOpenModalForEdit = (user) => {
-    setSelectedUser(user);
-    setIsModalOpen(true);
-  };
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setSelectedUser(null);
-    setError('');
-  };
+  // ---------- Actions ----------
+  const handleOpenModalForEdit = (user) => { setSelectedUser(user); setIsModalOpen(true); };
+  const handleCloseModal = () => { setIsModalOpen(false); setSelectedUser(null); setError(''); };
 
-  // ---------- Modale détails user (panier & wishlist) ----------
-  const handleOpenDetails = (user) => {
-    setDetailsUser(user);
-    setIsDetailsModalOpen(true);
-  };
-  const handleCloseDetails = () => {
-    setIsDetailsModalOpen(false);
-    setDetailsUser(null);
-  };
+  const handleOpenDetails = (user) => { setDetailsUser(user); setIsDetailsModalOpen(true); };
+  const handleCloseDetails = () => { setIsDetailsModalOpen(false); setDetailsUser(null); };
 
-  // ---------- Modale historique commandes ----------
-  const handleOpenHistory = (user) => {
-    setHistoryUser(user);
-    setIsHistoryModalOpen(true);
-  };
-  const handleCloseHistory = () => {
-    setIsHistoryModalOpen(false);
-    setHistoryUser(null);
-  };
+  const handleOpenHistory = (user) => { setHistoryUser(user); setIsHistoryModalOpen(true); };
+  const handleCloseHistory = () => { setIsHistoryModalOpen(false); setHistoryUser(null); };
 
-  // ---------- Modale détails d'une commande (depuis historique) ----------
-  const handleOpenOrderDetails = (orderId) => {
-    setSelectedOrderId(orderId);
-    setIsOrderDetailsModalOpen(true);
-  };
-  const handleCloseOrderDetails = () => {
-    setIsOrderDetailsModalOpen(false);
-    setSelectedOrderId(null);
-  };
+  const handleOpenOrderDetails = (orderId) => { setSelectedOrderId(orderId); setIsOrderDetailsModalOpen(true); };
+  const handleCloseOrderDetails = () => { setIsOrderDetailsModalOpen(false); setSelectedOrderId(null); };
 
   const handleSaveUser = (updatedUser) => {
-    setUsers((prevUsers) =>
-      prevUsers.map((user) => (user.id === updatedUser.id ? updatedUser : user))
-    );
+    setUsers((prev) => prev.map((u) => (u.id === updatedUser.id ? updatedUser : u)));
   };
 
-  // ---------- Blocage ----------
-  const handleOpenBlockModal = (user) => {
-    setBlockTarget(user);
-    setIsBlockModalOpen(true);
-  };
-
+  const handleOpenBlockModal = (user) => { setBlockTarget(user); setIsBlockModalOpen(true); };
   const handleCloseBlockModal = () => {
     if (isLoading) return;
     setIsBlockModalOpen(false);
@@ -160,32 +129,22 @@ function UserManagementPage() {
 
   const handleConfirmBlock = async (reason) => {
     if (!blockTarget) return;
-    setIsLoading(true);
-    setError('');
+    setIsLoading(true); setError('');
     try {
       await axios.put(
         `${API_BASE_URL}/users/${blockTarget.id}`,
         { is_active: false, blocked_reason: reason },
         { headers: { Authorization: `Bearer ${adminToken}` } }
       );
-      setIsBlockModalOpen(false);
-      setBlockTarget(null);
-      fetchUsers();
+      setIsBlockModalOpen(false); setBlockTarget(null); fetchUsers();
     } catch (err) {
-      console.error('Erreur blocage utilisateur:', err);
       setError(err.response?.data?.message || 'Erreur lors du blocage.');
-    } finally {
-      setIsLoading(false);
-    }
+    } finally { setIsLoading(false); }
   };
 
-  // ---------- Déblocage ----------
   const handleUnblockUser = async (userId, userName) => {
-    if (!window.confirm(`Débloquer "${userName}" ? L'utilisateur pourra à nouveau se connecter.`)) {
-      return;
-    }
-    setIsLoading(true);
-    setError('');
+    if (!window.confirm(`Débloquer "${userName}" ?`)) return;
+    setIsLoading(true); setError('');
     try {
       await axios.put(
         `${API_BASE_URL}/users/${userId}`,
@@ -194,20 +153,13 @@ function UserManagementPage() {
       );
       fetchUsers();
     } catch (err) {
-      console.error('Erreur déblocage utilisateur:', err);
       setError(err.response?.data?.message || 'Erreur lors du déblocage.');
-    } finally {
-      setIsLoading(false);
-    }
+    } finally { setIsLoading(false); }
   };
 
-  // ---------- Suppression ----------
   const handleDeleteUser = async (userId, userName) => {
-    if (!window.confirm(`Supprimer définitivement "${userName}" ? Cette action est irréversible.`)) {
-      return;
-    }
-    setIsLoading(true);
-    setError('');
+    if (!window.confirm(`Supprimer définitivement "${userName}" ? Cette action est irréversible.`)) return;
+    setIsLoading(true); setError('');
     try {
       await axios.delete(`${API_BASE_URL}/users/${userId}`, {
         headers: { Authorization: `Bearer ${adminToken}` },
@@ -216,30 +168,23 @@ function UserManagementPage() {
     } catch (err) {
       if (err.response?.status === 409 && err.response?.data?.hasOrders) {
         const veutAnonymiser = window.confirm(
-          `${err.response.data.message}\n\nVoulez-vous anonymiser ce compte à la place ? (efface son identité, garde ses commandes)`
+          `${err.response.data.message}\n\nVoulez-vous anonymiser ce compte à la place ?`
         );
-        if (veutAnonymiser) {
-          await handleAnonymizeUser(userId, userName, false);
-        }
+        if (veutAnonymiser) await handleAnonymizeUser(userId, userName, false);
       } else {
-        console.error('Erreur suppression utilisateur:', err);
-        setError(err.response?.data?.message || "Erreur lors de la suppression de l'utilisateur.");
+        setError(err.response?.data?.message || "Erreur lors de la suppression.");
       }
-    } finally {
-      setIsLoading(false);
-    }
+    } finally { setIsLoading(false); }
   };
 
-  // ---------- Anonymisation ----------
   const handleAnonymizeUser = async (userId, userName, askConfirm = true) => {
     if (askConfirm) {
       const confirme = window.confirm(
-        `Anonymiser "${userName}" ? Son nom, email, adresse et téléphone seront effacés. Ses commandes et avis resteront visibles pour vos statistiques.`
+        `Anonymiser "${userName}" ? Son nom, email, adresse et téléphone seront effacés. Ses commandes resteront visibles pour vos statistiques.`
       );
       if (!confirme) return;
     }
-    setIsLoading(true);
-    setError('');
+    setIsLoading(true); setError('');
     try {
       await axios.put(
         `${API_BASE_URL}/users/${userId}/anonymize`,
@@ -248,11 +193,8 @@ function UserManagementPage() {
       );
       fetchUsers();
     } catch (err) {
-      console.error("Erreur anonymisation utilisateur:", err);
       setError(err.response?.data?.message || "Erreur lors de l'anonymisation.");
-    } finally {
-      setIsLoading(false);
-    }
+    } finally { setIsLoading(false); }
   };
 
   // ---------- Utilitaires ----------
@@ -264,217 +206,301 @@ function UserManagementPage() {
   const formatDateTime = (dateString) => {
     if (!dateString) return '-';
     return new Date(dateString).toLocaleString('fr-FR', {
-      dateStyle: 'short',
-      timeStyle: 'short',
+      dateStyle: 'short', timeStyle: 'short',
     });
   };
 
+  // Couleur d'avatar déterministe basée sur l'id (comme GitHub)
+  const avatarColors = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#14b8a6'];
+  const getAvatarColor = (id) => avatarColors[(Number(id) || 0) % avatarColors.length];
+
+  const getInitials = (name, email) => {
+    if (name) {
+      const parts = name.trim().split(' ');
+      if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+      return name.substring(0, 2).toUpperCase();
+    }
+    if (email) return email.substring(0, 2).toUpperCase();
+    return '??';
+  };
+
+  // ---------- Stats ----------
+  const stats = useMemo(() => ({
+    total: users.length,
+    actifs: users.filter(u => u.is_active && !u.is_deleted).length,
+    bloques: users.filter(u => !u.is_active && !u.is_deleted).length,
+    anonymises: users.filter(u => u.is_deleted).length,
+  }), [users]);
+
   if (isLoading && users.length === 0) {
-    return <div className="management-page"><p>Chargement des utilisateurs...</p></div>;
+    return <div className="um-page"><div className="um-loading">Chargement des utilisateurs…</div></div>;
   }
 
   return (
-    <div className="management-page">
-      <div className="page-header">
-        <h1>Gestion des Utilisateurs</h1>
+    <div className="um-page">
+      {/* ---------- Header ---------- */}
+      <div className="um-header">
+        <div>
+          <h1 className="um-title">👥 Gestion des utilisateurs</h1>
+          <p className="um-subtitle">
+            {filteredUsers.length === users.length
+              ? `${users.length} utilisateur${users.length > 1 ? 's' : ''} au total`
+              : `${filteredUsers.length} résultat${filteredUsers.length > 1 ? 's' : ''} sur ${users.length}`}
+          </p>
+        </div>
+        <Link to="/dashboard" className="um-back-link">← Tableau de bord</Link>
       </div>
-      <Link to="/dashboard" className="back-link">← Retour au Tableau de Bord</Link>
 
-      {/* ---------- Barre de recherche + filtre ---------- */}
-      <div className="filters-container" style={{
-        display: 'flex',
-        flexWrap: 'wrap',
-        gap: '12px',
-        alignItems: 'flex-end',
-        padding: '15px',
-        border: '1px solid #e2e8f0',
-        borderRadius: '8px',
-        marginBottom: '20px',
-        backgroundColor: '#f9fafb',
-      }}>
-        <div style={{ flex: '1 1 300px', minWidth: '240px' }}>
-          <label htmlFor="userSearch" style={{ display: 'block', marginBottom: '5px', fontSize: '0.9em' }}>
-            🔍 Rechercher :
-          </label>
+      {/* ---------- Cartes stats ---------- */}
+      <div className="um-stats">
+        <div className="um-stat-card">
+          <div className="um-stat-label">Total</div>
+          <div className="um-stat-value">{stats.total}</div>
+        </div>
+        <div className="um-stat-card um-stat-active">
+          <div className="um-stat-label">Actifs</div>
+          <div className="um-stat-value">{stats.actifs}</div>
+        </div>
+        <div className="um-stat-card um-stat-blocked">
+          <div className="um-stat-label">Bloqués</div>
+          <div className="um-stat-value">{stats.bloques}</div>
+        </div>
+        <div className="um-stat-card um-stat-anon">
+          <div className="um-stat-label">Anonymisés</div>
+          <div className="um-stat-value">{stats.anonymises}</div>
+        </div>
+      </div>
+
+      {/* ---------- Barre de recherche + filtres ---------- */}
+      <div className="um-toolbar">
+        <div className="um-search">
+          <span className="um-search-icon">🔍</span>
           <input
-            id="userSearch"
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Nom, email, téléphone, adresse, ID..."
-            style={{
-              width: '100%',
-              padding: '10px 12px',
-              borderRadius: '6px',
-              border: '1px solid #ccc',
-              fontSize: '0.95rem',
-              boxSizing: 'border-box',
-            }}
+            placeholder="Rechercher par nom, email, téléphone, ville…"
+            className="um-search-input"
           />
+          {searchTerm && (
+            <button className="um-search-clear" onClick={() => setSearchTerm('')} title="Effacer">
+              ✕
+            </button>
+          )}
         </div>
 
-        <div>
-          <label htmlFor="statusFilter" style={{ display: 'block', marginBottom: '5px', fontSize: '0.9em' }}>
-            Statut :
-          </label>
-          <select
-            id="statusFilter"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #ccc', minWidth: '150px' }}
-          >
-            <option value="all">Tous</option>
-            <option value="active">✅ Actifs</option>
-            <option value="blocked">🚫 Bloqués</option>
-            <option value="anonymized">🕶️ Anonymisés</option>
-          </select>
-        </div>
-
-        <button
-          onClick={handleResetFilters}
-          className="action-btn"
-          style={{ padding: '10px 16px', cursor: 'pointer' }}
-          title="Réinitialiser les filtres"
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="um-filter-select"
         >
-          🔄 Réinitialiser
-        </button>
+          <option value="all">Tous les statuts</option>
+          <option value="active">✅ Actifs</option>
+          <option value="blocked">🚫 Bloqués</option>
+          <option value="anonymized">🕶️ Anonymisés</option>
+        </select>
+
+        {(searchTerm || statusFilter !== 'all') && (
+          <button onClick={handleResetFilters} className="um-btn-ghost" title="Réinitialiser">
+            🔄 Réinitialiser
+          </button>
+        )}
       </div>
 
-      {/* ---------- Compteur ---------- */}
-      <div style={{ marginBottom: '12px', color: '#666', fontSize: '0.9em' }}>
-        {filteredUsers.length === users.length
-          ? `${users.length} utilisateur(s) affiché(s)`
-          : `${filteredUsers.length} résultat(s) sur ${users.length} utilisateur(s)`}
-      </div>
+      {error && <div className="um-error">{error}</div>}
+      {isLoading && users.length > 0 && (
+        <div className="um-loading-bar">Mise à jour…</div>
+      )}
 
-      {error && <p className="error-message">{error}</p>}
-      {isLoading && <p className="loading-indicator">Opération en cours...</p>}
-
-      <div className="table-responsive">
-        <table className="custom-table">
+      {/* ---------- Tableau ---------- */}
+      <div className="um-table-wrapper">
+        <table className="um-table">
           <thead>
             <tr>
-              <th>ID</th>
-              <th>Nom</th>
-              <th>Email</th>
-              <th>Rôle</th>
-              <th>Adresse</th>
-              <th>Téléphone</th>
-              <th>Inscrit le</th>
+              <th>Utilisateur</th>
+              <th>Contact</th>
+              <th>Localisation</th>
+              <th>Inscription</th>
               <th>Statut</th>
-              <th>Actions</th>
+              <th style={{ textAlign: 'right' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {filteredUsers.length > 0 ? filteredUsers.map(user => {
-              const isBlocked = !user.is_active && !user.is_deleted;
-              const isAnonymized = user.is_deleted;
-
-              return (
-                <tr key={user.id} style={isAnonymized ? { opacity: 0.5 } : undefined}>
-                  <td>{user.id}</td>
-                  <td>{user.name}</td>
-                  <td>{user.email}</td>
-                  <td>{user.role}</td>
-                  <td>{user.address || '-'}</td>
-                  <td>{user.phone || '-'}</td>
-                  <td>{formatDate(user.created_at)}</td>
-
-                  <td>
-                    {isAnonymized ? (
-                      <span className="status-inactive">Anonymisé</span>
-                    ) : isBlocked ? (
-                      <div>
-                        <span className="status-inactive">🚫 Bloqué</span>
-                        {user.blocked_reason && (
-                          <div className="blocked-reason" title={user.blocked_reason}>
-                            « {user.blocked_reason} »
-                          </div>
-                        )}
-                        {user.blocked_at && (
-                          <div className="blocked-date">
-                            le {formatDateTime(user.blocked_at)}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="status-active">Actif</span>
-                    )}
-                  </td>
-
-                  <td className="actions-cell">
-                    <button
-                      onClick={() => handleOpenDetails(user)}
-                      className="action-btn"
-                      title="Voir panier & wishlist"
-                    >
-                      👁️
-                    </button>
-
-                    <button
-                      onClick={() => handleOpenHistory(user)}
-                      className="action-btn"
-                      title="Voir l'historique des commandes"
-                    >
-                      📜
-                    </button>
-
-                    <button
-                      onClick={() => handleOpenModalForEdit(user)}
-                      className="action-btn edit-btn"
-                      title="Modifier"
-                      disabled={user.is_deleted}
-                    >
-                      ✎
-                    </button>
-
-                    {!isAnonymized && (
-                      isBlocked ? (
-                        <button
-                          onClick={() => handleUnblockUser(user.id, user.name)}
-                          className="action-btn"
-                          title="Débloquer le compte"
-                        >
-                          ✅
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handleOpenBlockModal(user)}
-                          className="action-btn"
-                          title="Bloquer le compte"
-                        >
-                          🚫
-                        </button>
-                      )
-                    )}
-
-                    <button
-                      onClick={() => handleAnonymizeUser(user.id, user.name)}
-                      className="action-btn"
-                      title="Anonymiser (garder les données)"
-                      disabled={user.is_deleted}
-                    >
-                      🕶️
-                    </button>
-                    <button
-                      onClick={() => handleDeleteUser(user.id, user.name)}
-                      className="action-btn delete-btn"
-                      title="Supprimer définitivement"
-                      disabled={user.is_deleted}
-                    >
-                      🗑️
-                    </button>
-                  </td>
-                </tr>
-              );
-            }) : (
+            {filteredUsers.length === 0 ? (
               <tr>
-                <td colSpan="9" style={{textAlign: 'center', padding: '20px'}}>
+                <td colSpan="6" className="um-empty">
                   {searchTerm || statusFilter !== 'all'
                     ? '❌ Aucun utilisateur ne correspond à votre recherche.'
                     : 'Aucun utilisateur trouvé.'}
                 </td>
               </tr>
+            ) : (
+              filteredUsers.map((user) => {
+                const isBlocked = !user.is_active && !user.is_deleted;
+                const isAnonymized = user.is_deleted;
+
+                return (
+                  <tr
+                    key={user.id}
+                    className={isAnonymized ? 'um-row-anon' : ''}
+                  >
+                    {/* Utilisateur avec avatar */}
+                    <td>
+                      <div className="um-user-cell">
+                        <div
+                          className="um-avatar"
+                          style={{ backgroundColor: getAvatarColor(user.id) }}
+                        >
+                          {getInitials(user.name, user.email)}
+                        </div>
+                        <div className="um-user-info">
+                          <div className="um-user-name">{user.name || '—'}</div>
+                          <div className="um-user-id">#{user.id} · {user.role}</div>
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Contact */}
+                    <td>
+                      <div className="um-contact">
+                        <div className="um-contact-line">
+                          <span className="um-contact-icon">✉️</span>
+                          <span>{user.email}</span>
+                        </div>
+                        {user.phone && (
+                          <div className="um-contact-line um-muted">
+                            <span className="um-contact-icon">📞</span>
+                            <span>{user.phone}</span>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* Localisation */}
+                    <td>
+                      {user.address ? (
+                        <div className="um-contact-line">
+                          <span className="um-contact-icon">📍</span>
+                          <span>{user.address}</span>
+                        </div>
+                      ) : (
+                        <span className="um-muted">—</span>
+                      )}
+                    </td>
+
+                    {/* Inscription */}
+                    <td>
+                      <span className="um-date">{formatDate(user.created_at)}</span>
+                    </td>
+
+                    {/* Statut */}
+                    <td>
+                      {isAnonymized ? (
+                        <span className="um-badge um-badge-gray">🕶️ Anonymisé</span>
+                      ) : isBlocked ? (
+                        <div className="um-status-cell">
+                          <span className="um-badge um-badge-red">🚫 Bloqué</span>
+                          {user.blocked_reason && (
+                            <div
+                              className="um-block-reason"
+                              title={user.blocked_reason}
+                            >
+                              {user.blocked_reason}
+                            </div>
+                          )}
+                          {user.blocked_at && (
+                            <div className="um-block-date">
+                              le {formatDateTime(user.blocked_at)}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="um-badge um-badge-green">✅ Actif</span>
+                      )}
+                    </td>
+
+                    {/* Actions — menu déroulant */}
+                    <td style={{ textAlign: 'right' }}>
+                      <div className="um-actions">
+                        <button
+                          className="um-btn-icon"
+                          title="Voir panier & wishlist"
+                          onClick={() => handleOpenDetails(user)}
+                        >
+                          👁️
+                        </button>
+
+                        <button
+                          className="um-btn-icon"
+                          title="Historique commandes"
+                          onClick={() => handleOpenHistory(user)}
+                        >
+                          📜
+                        </button>
+
+                        <div className="um-menu-container">
+                          <button
+                            className="um-btn-icon"
+                            title="Plus d'actions"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenMenuId(openMenuId === user.id ? null : user.id);
+                            }}
+                          >
+                            ⋯
+                          </button>
+
+                          {openMenuId === user.id && (
+                            <div className="um-menu" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                className="um-menu-item"
+                                onClick={() => { setOpenMenuId(null); handleOpenModalForEdit(user); }}
+                                disabled={user.is_deleted}
+                              >
+                                ✎ Modifier
+                              </button>
+
+                              {!isAnonymized && (
+                                isBlocked ? (
+                                  <button
+                                    className="um-menu-item"
+                                    onClick={() => { setOpenMenuId(null); handleUnblockUser(user.id, user.name); }}
+                                  >
+                                    ✅ Débloquer
+                                  </button>
+                                ) : (
+                                  <button
+                                    className="um-menu-item"
+                                    onClick={() => { setOpenMenuId(null); handleOpenBlockModal(user); }}
+                                  >
+                                    🚫 Bloquer
+                                  </button>
+                                )
+                              )}
+
+                              <button
+                                className="um-menu-item"
+                                onClick={() => { setOpenMenuId(null); handleAnonymizeUser(user.id, user.name); }}
+                                disabled={user.is_deleted}
+                              >
+                                🕶️ Anonymiser
+                              </button>
+
+                              <button
+                                className="um-menu-item um-menu-item-danger"
+                                onClick={() => { setOpenMenuId(null); handleDeleteUser(user.id, user.name); }}
+                                disabled={user.is_deleted}
+                              >
+                                🗑️ Supprimer
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -483,50 +509,33 @@ function UserManagementPage() {
       {/* ---------- Modales ---------- */}
       {isModalOpen && (
         <UserFormModal
-          isOpen={isModalOpen}
-          onClose={handleCloseModal}
-          onSave={handleSaveUser}
-          userToEdit={selectedUser}
-          apiBaseUrl={API_BASE_URL}
-          adminToken={adminToken}
+          isOpen={isModalOpen} onClose={handleCloseModal} onSave={handleSaveUser}
+          userToEdit={selectedUser} apiBaseUrl={API_BASE_URL} adminToken={adminToken}
         />
       )}
 
       {isDetailsModalOpen && (
         <UserDetailsModal
-          isOpen={isDetailsModalOpen}
-          onClose={handleCloseDetails}
-          user={detailsUser}
-          apiBaseUrl={API_BASE_URL}
-          adminToken={adminToken}
+          isOpen={isDetailsModalOpen} onClose={handleCloseDetails}
+          user={detailsUser} apiBaseUrl={API_BASE_URL} adminToken={adminToken}
         />
       )}
 
       <BlockUserModal
-        isOpen={isBlockModalOpen}
-        onClose={handleCloseBlockModal}
-        onConfirm={handleConfirmBlock}
-        user={blockTarget}
-        isLoading={isLoading}
+        isOpen={isBlockModalOpen} onClose={handleCloseBlockModal}
+        onConfirm={handleConfirmBlock} user={blockTarget} isLoading={isLoading}
       />
 
       <UserOrderHistoryModal
-        isOpen={isHistoryModalOpen}
-        onClose={handleCloseHistory}
-        user={historyUser}
-        apiBaseUrl={API_BASE_URL}
-        adminToken={adminToken}
+        isOpen={isHistoryModalOpen} onClose={handleCloseHistory}
+        user={historyUser} apiBaseUrl={API_BASE_URL} adminToken={adminToken}
         onOpenOrderDetails={handleOpenOrderDetails}
       />
 
-      {/* Modale détails commande — s'ouvre PAR-DESSUS la modale historique */}
       {isOrderDetailsModalOpen && selectedOrderId && (
         <OrderDetailsModal
-          isOpen={isOrderDetailsModalOpen}
-          onClose={handleCloseOrderDetails}
-          orderId={selectedOrderId}
-          apiBaseUrl={API_BASE_URL}
-          adminToken={adminToken}
+          isOpen={isOrderDetailsModalOpen} onClose={handleCloseOrderDetails}
+          orderId={selectedOrderId} apiBaseUrl={API_BASE_URL} adminToken={adminToken}
         />
       )}
     </div>

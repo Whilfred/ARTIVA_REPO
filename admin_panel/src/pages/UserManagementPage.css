@@ -1,0 +1,503 @@
+/* ============================================================================
+   UserManagementPage.css — Design de la page utilisateurs
+   ============================================================================ */
+
+.um-page {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #111827;
+}
+
+/* ---------- Header ---------- */
+.um-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.um-title {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.um-subtitle {
+  margin: 4px 0 0;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.um-back-link {
+  color: #6366f1;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 8px 14px;
+  border-radius: 8px;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.um-back-link:hover {
+  background: #eef2ff;
+}
+
+/* ---------- Cartes stats ---------- */
+.um-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.um-stat-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px 18px;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.um-stat-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.um-stat-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.um-stat-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #111827;
+  margin-top: 6px;
+  line-height: 1;
+}
+
+.um-stat-active { border-left: 4px solid #10b981; }
+.um-stat-active .um-stat-value { color: #166534; }
+
+.um-stat-blocked { border-left: 4px solid #ef4444; }
+.um-stat-blocked .um-stat-value { color: #991b1b; }
+
+.um-stat-anon { border-left: 4px solid #9ca3af; }
+.um-stat-anon .um-stat-value { color: #4b5563; }
+
+/* ---------- Toolbar (recherche + filtres) ---------- */
+.um-toolbar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.um-search {
+  position: relative;
+  flex: 1 1 320px;
+  min-width: 240px;
+}
+
+.um-search-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.95rem;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.um-search-input {
+  width: 100%;
+  padding: 11px 40px 11px 40px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  background: #fff;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-sizing: border-box;
+  outline: none;
+}
+
+.um-search-input:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+.um-search-clear {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #f3f4f6;
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  color: #6b7280;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.um-search-clear:hover {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.um-filter-select {
+  padding: 11px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #fff;
+  font-size: 0.92rem;
+  cursor: pointer;
+  outline: none;
+  min-width: 160px;
+}
+
+.um-filter-select:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+.um-btn-ghost {
+  padding: 11px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #4b5563;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.um-btn-ghost:hover {
+  background: #f9fafb;
+}
+
+/* ---------- Messages ---------- */
+.um-error {
+  background: #fee2e2;
+  color: #991b1b;
+  padding: 12px 16px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+  border-left: 4px solid #dc2626;
+  font-size: 0.9rem;
+}
+
+.um-loading {
+  text-align: center;
+  padding: 60px 20px;
+  color: #6b7280;
+  font-size: 1rem;
+}
+
+.um-loading-bar {
+  text-align: center;
+  padding: 8px;
+  color: #6b7280;
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+}
+
+/* ---------- Tableau ---------- */
+.um-table-wrapper {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.um-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.um-table thead th {
+  text-align: left;
+  padding: 14px 16px;
+  background: #f9fafb;
+  font-weight: 600;
+  color: #374151;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #e5e7eb;
+  white-space: nowrap;
+}
+
+.um-table tbody td {
+  padding: 14px 16px;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: middle;
+}
+
+.um-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.um-table tbody tr:hover {
+  background: #fafbfc;
+}
+
+.um-row-anon {
+  opacity: 0.55;
+}
+
+.um-empty {
+  text-align: center;
+  padding: 60px 20px !important;
+  color: #6b7280;
+  font-style: italic;
+}
+
+/* ---------- Cellule utilisateur ---------- */
+.um-user-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.um-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+  letter-spacing: 0.5px;
+}
+
+.um-user-info {
+  min-width: 0;
+}
+
+.um-user-name {
+  font-weight: 600;
+  color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+.um-user-id {
+  font-size: 0.78rem;
+  color: #9ca3af;
+  margin-top: 2px;
+}
+
+/* ---------- Contact / Localisation ---------- */
+.um-contact {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.um-contact-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.88rem;
+  color: #374151;
+}
+
+.um-contact-icon {
+  font-size: 0.85rem;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.um-muted {
+  color: #9ca3af;
+  font-size: 0.85rem;
+}
+
+.um-date {
+  font-size: 0.88rem;
+  color: #4b5563;
+  white-space: nowrap;
+}
+
+/* ---------- Badges de statut ---------- */
+.um-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.um-badge-green {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.um-badge-red {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.um-badge-gray {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.um-status-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.um-block-reason {
+  font-size: 0.75rem;
+  color: #991b1b;
+  font-style: italic;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.um-block-date {
+  font-size: 0.72rem;
+  color: #9ca3af;
+}
+
+/* ---------- Actions ---------- */
+.um-actions {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+  align-items: center;
+  position: relative;
+}
+
+.um-btn-icon {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  padding: 0;
+}
+
+.um-btn-icon:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.um-btn-icon:active {
+  transform: scale(0.95);
+}
+
+/* ---------- Menu déroulant ---------- */
+.um-menu-container {
+  position: relative;
+}
+
+.um-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  min-width: 180px;
+  z-index: 50;
+  padding: 6px;
+  animation: umFadeIn 0.12s ease-out;
+}
+
+@keyframes umFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.um-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.88rem;
+  color: #374151;
+  text-align: left;
+  transition: background 0.1s;
+}
+
+.um-menu-item:hover:not(:disabled) {
+  background: #f3f4f6;
+}
+
+.um-menu-item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.um-menu-item-danger {
+  color: #dc2626;
+}
+
+.um-menu-item-danger:hover:not(:disabled) {
+  background: #fee2e2;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 900px) {
+  .um-page { padding: 16px; }
+
+  .um-table thead th:nth-child(3),
+  .um-table tbody td:nth-child(3),
+  .um-table thead th:nth-child(4),
+  .um-table tbody td:nth-child(4) {
+    display: none;
+  }
+
+  .um-user-name { max-width: 120px; }
+}
+
+@media (max-width: 600px) {
+  .um-header { flex-direction: column; align-items: flex-start; }
+  .um-toolbar { flex-direction: column; align-items: stretch; }
+  .um-filter-select { width: 100%; }
+  .um-btn-ghost { width: 100%; }
+}
