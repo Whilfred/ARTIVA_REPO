@@ -19,6 +19,7 @@ function CampaignsPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [campaignToEdit, setCampaignToEdit] = useState(null);   // ← NOUVEAU
 
   const adminToken = localStorage.getItem('adminToken');
   const navigate = useNavigate();
@@ -47,14 +48,38 @@ function CampaignsPage() {
     fetchCampaigns();
   }, [fetchCampaigns]);
 
-  // Rafraîchit automatiquement pendant qu'une campagne est en cours d'envoi,
-  // pour voir les compteurs envoyés/échoués progresser sans recharger la page.
   useEffect(() => {
     const enCours = campaigns.some((c) => c.status === 'sending');
     if (!enCours) return;
     const interval = setInterval(fetchCampaigns, 5000);
     return () => clearInterval(interval);
   }, [campaigns, fetchCampaigns]);
+
+  // ---------- Ouvrir la modale (création ou édition) ----------
+  const handleOpenCreate = () => {
+    setCampaignToEdit(null);
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEdit = async (campaign) => {
+    // On doit charger les détails complets (target_filter, manual_user_ids…)
+    // car la liste ne renvoie pas tout.
+    try {
+      const res = await axios.get(`${API_BASE_URL}/campaigns/${campaign.id}`, {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      setCampaignToEdit(res.data.campaign);
+      setIsModalOpen(true);
+    } catch (err) {
+      console.error('Erreur chargement détails campagne:', err);
+      setError(err.response?.data?.message || 'Impossible de charger les détails.');
+    }
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setCampaignToEdit(null);
+  };
 
   const handleSendNow = async (id) => {
     if (!window.confirm('Envoyer cette campagne maintenant ?')) return;
@@ -86,7 +111,7 @@ function CampaignsPage() {
     <div className="management-page">
       <div className="page-header">
         <h1>Campagnes Email</h1>
-        <button className="add-product-btn" onClick={() => setIsModalOpen(true)}>+ Nouvelle campagne</button>
+        <button className="add-product-btn" onClick={handleOpenCreate}>+ Nouvelle campagne</button>
       </div>
       <Link to="/dashboard" className="back-link">← Retour au Tableau de Bord</Link>
 
@@ -108,6 +133,8 @@ function CampaignsPage() {
           <tbody>
             {campaigns.length > 0 ? campaigns.map((c) => {
               const statut = STATUT_LABELS[c.status] || { label: c.status, color: '#666' };
+              const canEdit = c.status === 'draft' || c.status === 'scheduled';
+
               return (
                 <tr key={c.id}>
                   <td>{c.subject}</td>
@@ -120,10 +147,29 @@ function CampaignsPage() {
                     {c.status === 'draft' && '-'}
                   </td>
                   <td className="actions-cell">
-                    {(c.status === 'draft' || c.status === 'scheduled') && (
+                    {canEdit && (
                       <>
-                        <button onClick={() => handleSendNow(c.id)} className="action-btn" title="Envoyer maintenant">📤</button>
-                        <button onClick={() => handleDelete(c.id)} className="action-btn delete-btn" title="Supprimer">🗑️</button>
+                        <button
+                          onClick={() => handleOpenEdit(c)}
+                          className="action-btn"
+                          title="Modifier"
+                        >
+                          ✎
+                        </button>
+                        <button
+                          onClick={() => handleSendNow(c.id)}
+                          className="action-btn"
+                          title="Envoyer maintenant"
+                        >
+                          📤
+                        </button>
+                        <button
+                          onClick={() => handleDelete(c.id)}
+                          className="action-btn delete-btn"
+                          title="Supprimer"
+                        >
+                          🗑️
+                        </button>
                       </>
                     )}
                   </td>
@@ -139,10 +185,11 @@ function CampaignsPage() {
       {isModalOpen && (
         <CampaignFormModal
           isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
+          onClose={handleCloseModal}
           onSaved={fetchCampaigns}
           apiBaseUrl={API_BASE_URL}
           adminToken={adminToken}
+          campaignToEdit={campaignToEdit}
         />
       )}
     </div>

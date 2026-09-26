@@ -266,6 +266,84 @@ exports.deleteCampaign = async (req, res) => {
   }
 };
 
+
+// =============================================================================
+// PUT /api/campaigns/:id — modifier un brouillon ou une campagne programmée
+// =============================================================================
+
+exports.updateCampaign = async (req, res) => {
+  const { id } = req.params;
+  const {
+    subject,
+    body_html,
+    target_type,
+    target_filter,
+    manual_user_ids,
+    scheduled_at,
+  } = req.body;
+
+  if (!subject || !body_html) {
+    return res.status(400).json({ message: 'Le sujet et le contenu sont requis.' });
+  }
+  if (!['all', 'manual', 'filter'].includes(target_type)) {
+    return res.status(400).json({ message: 'Ciblage invalide.' });
+  }
+
+  // Calcul du nouveau statut : si scheduled_at est fourni → scheduled, sinon draft
+  let newStatus = 'draft';
+  if (scheduled_at) {
+    if (new Date(scheduled_at) <= new Date()) {
+      return res.status(400).json({ message: 'La date programmée doit être dans le futur.' });
+    }
+    newStatus = 'scheduled';
+  }
+
+  try {
+    // On ne peut modifier qu'un brouillon ou une campagne programmée
+    const { rows } = await db.query(
+      `UPDATE email_campaigns SET
+        subject = $1,
+        body_html = $2,
+        target_type = $3,
+        target_filter = $4,
+        manual_user_ids = $5,
+        scheduled_at = $6,
+        status = $7,
+        updated_at = CURRENT_TIMESTAMP
+       WHERE id = $8 AND status IN ('draft', 'scheduled')
+       RETURNING *`,
+      [
+        subject,
+        body_html,
+        target_type,
+        target_filter ? JSON.stringify(target_filter) : null,
+        Array.isArray(manual_user_ids) ? manual_user_ids : null,
+        scheduled_at || null,
+        newStatus,
+        id,
+      ]
+    );
+
+    if (rows.length === 0) {
+      return res.status(400).json({
+        message:
+          'Cette campagne ne peut pas être modifiée (déjà envoyée ou en cours d\'envoi).',
+      });
+    }
+
+    res.status(200).json({
+      message:
+        newStatus === 'scheduled'
+          ? 'Campagne mise à jour et reprogrammée.'
+          : 'Brouillon mis à jour.',
+      campaign: rows[0],
+    });
+  } catch (error) {
+    console.error(`Erreur mise à jour campagne ${id}:`, error);
+    res.status(500).json({ message: 'Erreur serveur lors de la mise à jour.' });
+  }
+};
+
 // =============================================================================
 // Exécution réelle de l'envoi — appelée en tâche de fond, jamais directement
 // depuis une route (pas de req/res ici).

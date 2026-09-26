@@ -1,3 +1,4 @@
+// admin_panel/src/components/CampaignFormModal.js
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import './ProductFormModal.css';
@@ -44,27 +45,16 @@ function CampaignFormModal({
   onSaved,
   apiBaseUrl,
   adminToken,
+  campaignToEdit = null,
 }) {
+  const isEditMode = Boolean(campaignToEdit);
+
   const [subject, setSubject] = useState(INITIAL_FORM.subject);
-
-  // Le contenu HTML du corps de l'email (généré par l'éditeur riche)
   const [body, setBody] = useState(INITIAL_FORM.body);
-
-  const [targetType, setTargetType] = useState(
-    INITIAL_FORM.targetType
-  );
-
-  const [neverOrdered, setNeverOrdered] = useState(
-    INITIAL_FORM.neverOrdered
-  );
-
-  const [inactiveDays, setInactiveDays] = useState(
-    INITIAL_FORM.inactiveDays
-  );
-
-  const [abandonedCartHours, setAbandonedCartHours] = useState(
-    INITIAL_FORM.abandonedCartHours
-  );
+  const [targetType, setTargetType] = useState(INITIAL_FORM.targetType);
+  const [neverOrdered, setNeverOrdered] = useState(INITIAL_FORM.neverOrdered);
+  const [inactiveDays, setInactiveDays] = useState(INITIAL_FORM.inactiveDays);
+  const [abandonedCartHours, setAbandonedCartHours] = useState(INITIAL_FORM.abandonedCartHours);
 
   const [allUsers, setAllUsers] = useState([]);
   const [manualUserIds, setManualUserIds] = useState([]);
@@ -78,47 +68,31 @@ function CampaignFormModal({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
 
-  // ============================================================
-  // ÉDITEUR RICHE (style Word) — style global du document email
-  // ============================================================
-
   const editorRef = useRef(null);
 
-  const [docFontFamily, setDocFontFamily] = useState(
-    FONT_FAMILIES[0].value
-  );
-  const [docLineHeight, setDocLineHeight] = useState(
-    LINE_HEIGHTS[1].value
-  );
+  const [docFontFamily, setDocFontFamily] = useState(FONT_FAMILIES[0].value);
+  const [docLineHeight, setDocLineHeight] = useState(LINE_HEIGHTS[1].value);
   const [docTextAlign, setDocTextAlign] = useState('left');
 
   // ============================================================
   // RESET
   // ============================================================
-
   const resetForm = useCallback(() => {
     setSubject('');
     setBody('');
-
     setTargetType('all');
-
     setNeverOrdered(false);
     setInactiveDays('');
     setAbandonedCartHours('');
-
     setManualUserIds([]);
     setUserSearch('');
-
     setScheduleEnabled(false);
     setScheduledAt('');
-
     setPreview(null);
     setError('');
-
     setDocFontFamily(FONT_FAMILIES[0].value);
     setDocLineHeight(LINE_HEIGHTS[1].value);
     setDocTextAlign('left');
-
     if (editorRef.current) {
       editorRef.current.innerHTML = '';
     }
@@ -127,90 +101,86 @@ function CampaignFormModal({
   // ============================================================
   // CHARGEMENT DES UTILISATEURS
   // ============================================================
-
   useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
+    if (!isOpen) return;
 
     axios
       .get(`${apiBaseUrl}/users`, {
-        headers: {
-          Authorization: `Bearer ${adminToken}`,
-        },
+        headers: { Authorization: `Bearer ${adminToken}` },
       })
-      .then((res) => {
-        setAllUsers(res.data || []);
-      })
-      .catch((err) => {
-        console.error(
-          'Erreur chargement utilisateurs pour campagne:',
-          err
-        );
-      });
+      .then((res) => setAllUsers(res.data || []))
+      .catch((err) =>
+        console.error('Erreur chargement utilisateurs pour campagne:', err)
+      );
   }, [isOpen, apiBaseUrl, adminToken]);
 
   // ============================================================
-  // RESET UNIQUEMENT À L'OUVERTURE
+  // RESET + PRÉ-REMPLISSAGE À L'OUVERTURE
   // ============================================================
-
   useEffect(() => {
-    if (isOpen) {
-      resetForm();
+    if (!isOpen) return;
+
+    resetForm();
+
+    if (campaignToEdit) {
+      setSubject(campaignToEdit.subject || '');
+
+      setBody(campaignToEdit.body_html || '');
+      if (editorRef.current) {
+        editorRef.current.innerHTML = campaignToEdit.body_html || '';
+      }
+
+      setTargetType(campaignToEdit.target_type || 'all');
+
+      const filtre = campaignToEdit.target_filter || {};
+      setNeverOrdered(Boolean(filtre.never_ordered));
+      setInactiveDays(filtre.inactive_days ? String(filtre.inactive_days) : '');
+      setAbandonedCartHours(
+        filtre.abandoned_cart_hours ? String(filtre.abandoned_cart_hours) : ''
+      );
+
+      setManualUserIds(
+        Array.isArray(campaignToEdit.manual_user_ids)
+          ? campaignToEdit.manual_user_ids
+          : []
+      );
+
+      if (campaignToEdit.scheduled_at) {
+        setScheduleEnabled(true);
+        const dt = new Date(campaignToEdit.scheduled_at);
+        const pad = (n) => String(n).padStart(2, '0');
+        const local = `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(
+          dt.getDate()
+        )}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+        setScheduledAt(local);
+      }
     }
-  }, [isOpen, resetForm]);
+  }, [isOpen, campaignToEdit, resetForm]);
 
   // ============================================================
   // DESTINATAIRES
   // ============================================================
-
   const buildTargetPayload = useCallback(() => {
     const target_filter = {};
 
-    if (neverOrdered) {
-      target_filter.never_ordered = true;
-    }
-
-    if (inactiveDays) {
-      target_filter.inactive_days = parseInt(
-        inactiveDays,
-        10
-      );
-    }
-
-    if (abandonedCartHours) {
-      target_filter.abandoned_cart_hours = parseInt(
-        abandonedCartHours,
-        10
-      );
-    }
+    if (neverOrdered) target_filter.never_ordered = true;
+    if (inactiveDays) target_filter.inactive_days = parseInt(inactiveDays, 10);
+    if (abandonedCartHours)
+      target_filter.abandoned_cart_hours = parseInt(abandonedCartHours, 10);
 
     return {
       target_type: targetType,
-
-      target_filter:
-        targetType === 'filter'
-          ? target_filter
-          : undefined,
-
+      target_filter: targetType === 'filter' ? target_filter : undefined,
       manual_user_ids:
-        targetType === 'manual' ||
-        targetType === 'filter'
+        targetType === 'manual' || targetType === 'filter'
           ? manualUserIds
           : undefined,
     };
-  }, [
-    targetType,
-    neverOrdered,
-    inactiveDays,
-    abandonedCartHours,
-    manualUserIds,
-  ]);
+  }, [targetType, neverOrdered, inactiveDays, abandonedCartHours, manualUserIds]);
 
   // ============================================================
   // APERÇU
   // ============================================================
-
   const handlePreview = async () => {
     setIsPreviewing(true);
     setError('');
@@ -219,23 +189,13 @@ function CampaignFormModal({
       const res = await axios.post(
         `${apiBaseUrl}/campaigns/preview`,
         buildTargetPayload(),
-        {
-          headers: {
-            Authorization: `Bearer ${adminToken}`,
-          },
-        }
+        { headers: { Authorization: `Bearer ${adminToken}` } }
       );
-
       setPreview(res.data);
     } catch (err) {
-      console.error(
-        'Erreur aperçu destinataires:',
-        err
-      );
-
+      console.error('Erreur aperçu destinataires:', err);
       setError(
-        err.response?.data?.message ||
-          'Impossible de calculer les destinataires.'
+        err.response?.data?.message || 'Impossible de calculer les destinataires.'
       );
     } finally {
       setIsPreviewing(false);
@@ -243,13 +203,14 @@ function CampaignFormModal({
   };
 
   // ============================================================
-  // OUTILS DE MISE EN FORME (comme Word) SUR LA SÉLECTION
+  // OUTILS DE MISE EN FORME
   // ============================================================
-
   const focusEditor = () => {
-    if (editorRef.current) {
-      editorRef.current.focus();
-    }
+    if (editorRef.current) editorRef.current.focus();
+  };
+
+  const syncBodyFromEditor = () => {
+    if (editorRef.current) setBody(editorRef.current.innerHTML);
   };
 
   const applyCommand = (command, value = null) => {
@@ -258,23 +219,12 @@ function CampaignFormModal({
     syncBodyFromEditor();
   };
 
-  const syncBodyFromEditor = () => {
-    if (editorRef.current) {
-      setBody(editorRef.current.innerHTML);
-    }
-  };
-
   const handleBold = () => applyCommand('bold');
   const handleItalic = () => applyCommand('italic');
   const handleUnderline = () => applyCommand('underline');
 
-  const handleFontSizeChange = (e) => {
-    applyCommand('fontSize', e.target.value);
-  };
-
-  const handleTextColorChange = (e) => {
-    applyCommand('foreColor', e.target.value);
-  };
+  const handleFontSizeChange = (e) => applyCommand('fontSize', e.target.value);
+  const handleTextColorChange = (e) => applyCommand('foreColor', e.target.value);
 
   const handleAlign = (align) => {
     const map = {
@@ -287,22 +237,18 @@ function CampaignFormModal({
 
   const handleInsertLink = () => {
     const url = window.prompt('URL du lien :', 'https://');
-    if (url) {
-      applyCommand('createLink', url);
-    }
+    if (url) applyCommand('createLink', url);
   };
 
   // ============================================================
-  // INSERTION D'IMAGE PAR URL
+  // IMAGE PAR URL
   // ============================================================
-
   const [imageUrlInput, setImageUrlInput] = useState('');
   const [imageWidthInput, setImageWidthInput] = useState('');
   const [showImageTool, setShowImageTool] = useState(false);
 
   const handleInsertImage = () => {
     const trimmedUrl = imageUrlInput.trim();
-
     if (!trimmedUrl) {
       setError("Merci d'indiquer une URL d'image valide.");
       return;
@@ -310,8 +256,6 @@ function CampaignFormModal({
 
     focusEditor();
 
-    // On insère directement une balise <img> pour pouvoir
-    // contrôler la largeur (et donc la "distance"/mise en page).
     const widthAttr = imageWidthInput
       ? ` width="${parseInt(imageWidthInput, 10)}"`
       : '';
@@ -319,7 +263,6 @@ function CampaignFormModal({
     const imgHtml = `<img src="${trimmedUrl}"${widthAttr} style="max-width:100%; display:block; margin: 10px auto;" alt="" />`;
 
     document.execCommand('insertHTML', false, imgHtml);
-
     syncBodyFromEditor();
 
     setImageUrlInput('');
@@ -329,33 +272,23 @@ function CampaignFormModal({
   };
 
   // ============================================================
-  // ESPACEMENT / STYLE GLOBAL DU DOCUMENT
+  // STYLE GLOBAL DU DOCUMENT
   // ============================================================
-
-  const handleDocFontFamilyChange = (e) => {
-    setDocFontFamily(e.target.value);
-  };
-
-  const handleDocLineHeightChange = (e) => {
-    setDocLineHeight(e.target.value);
-  };
+  const handleDocFontFamilyChange = (e) => setDocFontFamily(e.target.value);
+  const handleDocLineHeightChange = (e) => setDocLineHeight(e.target.value);
 
   // ============================================================
-  // ENVOI
+  // CONSTRUCTION DU HTML FINAL
   // ============================================================
-
   const buildFinalBodyHtml = () => {
-    // On enveloppe le contenu de l'éditeur dans un conteneur
-    // qui porte les réglages de style globaux (police,
-    // interlignage, alignement) — comme la mise en page d'un
-    // document Word.
     return `<div style="font-family:${docFontFamily}; line-height:${docLineHeight}; text-align:${docTextAlign};">${body}</div>`;
   };
 
+  // ============================================================
+  // ENVOI (création ou mise à jour)
+  // ============================================================
   const handleSubmit = async (mode) => {
-    const plainText = editorRef.current
-      ? editorRef.current.innerText.trim()
-      : '';
+    const plainText = editorRef.current ? editorRef.current.innerText.trim() : '';
 
     if (!subject.trim() || !plainText) {
       setError('Le sujet et le contenu sont requis.');
@@ -363,32 +296,32 @@ function CampaignFormModal({
     }
 
     if (mode === 'schedule' && !scheduledAt) {
-      setError(
-        "Choisissez une date/heure de programmation."
-      );
+      setError('Choisissez une date/heure de programmation.');
       return;
     }
 
-    if (
-      targetType === 'manual' &&
-      manualUserIds.length === 0
-    ) {
-      setError(
-        'Sélectionnez au moins un utilisateur.'
-      );
+    if (targetType === 'manual' && manualUserIds.length === 0) {
+      setError('Sélectionnez au moins un utilisateur.');
       return;
     }
 
+    // Confirmation seulement si envoi immédiat
     if (
-      mode !== 'draft' &&
+      mode === 'now' &&
+      !isEditMode &&
       !window.confirm(
-        mode === 'now'
-          ? `Envoyer cette campagne maintenant à ${
-              preview?.count ?? '?'
-            } destinataire(s) ?`
-          : `Programmer cet envoi pour le ${new Date(
-              scheduledAt
-            ).toLocaleString('fr-FR')} ?`
+        `Envoyer cette campagne maintenant à ${preview?.count ?? '?'} destinataire(s) ?`
+      )
+    ) {
+      return;
+    }
+
+    if (
+      mode === 'schedule' &&
+      !window.confirm(
+        `Programmer cet envoi pour le ${new Date(scheduledAt).toLocaleString(
+          'fr-FR'
+        )} ?`
       )
     ) {
       return;
@@ -400,42 +333,32 @@ function CampaignFormModal({
     try {
       const payload = {
         subject: subject.trim(),
-
         body_html: buildFinalBodyHtml(),
-
         ...buildTargetPayload(),
-
         scheduled_at:
-          mode === 'schedule'
-            ? new Date(
-                scheduledAt
-              ).toISOString()
-            : undefined,
-
+          mode === 'schedule' ? new Date(scheduledAt).toISOString() : undefined,
         send_now: mode === 'now',
       };
 
-      await axios.post(
-        `${apiBaseUrl}/campaigns`,
-        payload,
-        {
-          headers: {
-            Authorization: `Bearer ${adminToken}`,
-          },
-        }
-      );
+      const url = isEditMode
+        ? `${apiBaseUrl}/campaigns/${campaignToEdit.id}`
+        : `${apiBaseUrl}/campaigns`;
+
+      const method = isEditMode ? 'put' : 'post';
+
+      await axios[method](url, payload, {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
 
       onSaved();
       onClose();
     } catch (err) {
-      console.error(
-        'Erreur création campagne:',
-        err
-      );
-
+      console.error('Erreur sauvegarde campagne:', err);
       setError(
         err.response?.data?.message ||
-          'Erreur lors de la création de la campagne.'
+          (isEditMode
+            ? 'Erreur lors de la mise à jour de la campagne.'
+            : 'Erreur lors de la création de la campagne.')
       );
     } finally {
       setIsSaving(false);
@@ -445,45 +368,22 @@ function CampaignFormModal({
   // ============================================================
   // RECHERCHE UTILISATEURS
   // ============================================================
-
   const filteredUsers = allUsers.filter((u) => {
-    if (!userSearch.trim()) {
-      return true;
-    }
-
+    if (!userSearch.trim()) return true;
     const search = userSearch.toLowerCase();
-
     return (
       u.name?.toLowerCase().includes(search) ||
       u.email?.toLowerCase().includes(search)
     );
   });
 
-  // ============================================================
-  // SÉLECTION UTILISATEUR
-  // ============================================================
-
   const toggleManualUser = (id) => {
-    setManualUserIds((prev) => {
-      if (prev.includes(id)) {
-        return prev.filter((x) => x !== id);
-      }
-
-      return [...prev, id];
-    });
+    setManualUserIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
   };
 
-  // ============================================================
-  // MODAL FERMÉ
-  // ============================================================
-
-  if (!isOpen) {
-    return null;
-  }
-
-  // ============================================================
-  // INTERFACE
-  // ============================================================
+  if (!isOpen) return null;
 
   const toolbarBtnStyle = {
     border: '1px solid #ccc',
@@ -495,26 +395,19 @@ function CampaignFormModal({
   };
 
   return (
-    <div
-      className="modal-overlay"
-      onClick={onClose}
-    >
+    <div className="modal-overlay" onClick={onClose}>
       <div
         className="modal-content"
         onClick={(e) => e.stopPropagation()}
         style={{ maxWidth: 800 }}
       >
-        <h2>Nouvelle campagne email</h2>
+        <h2>{isEditMode ? '✎ Modifier la campagne' : 'Nouvelle campagne email'}</h2>
 
         {/* ================================================== */}
         {/* SUJET */}
         {/* ================================================== */}
-
         <div className="form-group">
-          <label htmlFor="campaign-subject">
-            Sujet :
-          </label>
-
+          <label htmlFor="campaign-subject">Sujet :</label>
           <input
             type="text"
             id="campaign-subject"
@@ -525,21 +418,17 @@ function CampaignFormModal({
             }}
             placeholder="Ex: {nom}, une offre rien que pour vous 🎁"
           />
-
           <small style={{ color: '#666' }}>
-            {'{nom}'} sera remplacé par le nom de
-            chaque destinataire.
+            {'{nom}'} sera remplacé par le nom de chaque destinataire.
           </small>
         </div>
 
         {/* ================================================== */}
-        {/* CONTENU — ÉDITEUR RICHE TYPE WORD */}
+        {/* CONTENU */}
         {/* ================================================== */}
-
         <div className="form-group">
           <label>Contenu :</label>
 
-          {/* --- Réglages globaux du document (style Word) --- */}
           <div
             style={{
               display: 'flex',
@@ -598,7 +487,6 @@ function CampaignFormModal({
             </label>
           </div>
 
-          {/* --- Barre d'outils de mise en forme (sélection) --- */}
           <div
             style={{
               display: 'flex',
@@ -608,15 +496,30 @@ function CampaignFormModal({
               marginBottom: 6,
             }}
           >
-            <button type="button" style={toolbarBtnStyle} onMouseDown={(e) => e.preventDefault()} onClick={handleBold}>
+            <button
+              type="button"
+              style={toolbarBtnStyle}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={handleBold}
+            >
               <b>G</b>
             </button>
 
-            <button type="button" style={toolbarBtnStyle} onMouseDown={(e) => e.preventDefault()} onClick={handleItalic}>
+            <button
+              type="button"
+              style={toolbarBtnStyle}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={handleItalic}
+            >
               <i>I</i>
             </button>
 
-            <button type="button" style={toolbarBtnStyle} onMouseDown={(e) => e.preventDefault()} onClick={handleUnderline}>
+            <button
+              type="button"
+              style={toolbarBtnStyle}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={handleUnderline}
+            >
               <u>S</u>
             </button>
 
@@ -638,22 +541,49 @@ function CampaignFormModal({
               title="Couleur du texte"
               onMouseDown={(e) => e.preventDefault()}
               onChange={handleTextColorChange}
-              style={{ width: 32, height: 30, padding: 0, border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer' }}
+              style={{
+                width: 32,
+                height: 30,
+                padding: 0,
+                border: '1px solid #ccc',
+                borderRadius: 4,
+                cursor: 'pointer',
+              }}
             />
 
-            <button type="button" style={toolbarBtnStyle} onMouseDown={(e) => e.preventDefault()} onClick={() => handleAlign('left')}>
+            <button
+              type="button"
+              style={toolbarBtnStyle}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => handleAlign('left')}
+            >
               ⇤
             </button>
 
-            <button type="button" style={toolbarBtnStyle} onMouseDown={(e) => e.preventDefault()} onClick={() => handleAlign('center')}>
+            <button
+              type="button"
+              style={toolbarBtnStyle}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => handleAlign('center')}
+            >
               ↔
             </button>
 
-            <button type="button" style={toolbarBtnStyle} onMouseDown={(e) => e.preventDefault()} onClick={() => handleAlign('right')}>
+            <button
+              type="button"
+              style={toolbarBtnStyle}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => handleAlign('right')}
+            >
               ⇥
             </button>
 
-            <button type="button" style={toolbarBtnStyle} onMouseDown={(e) => e.preventDefault()} onClick={handleInsertLink}>
+            <button
+              type="button"
+              style={toolbarBtnStyle}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={handleInsertLink}
+            >
               🔗 Lien
             </button>
 
@@ -667,7 +597,6 @@ function CampaignFormModal({
             </button>
           </div>
 
-          {/* --- Panneau d'insertion d'image par URL --- */}
           {showImageTool && (
             <div
               style={{
@@ -686,7 +615,12 @@ function CampaignFormModal({
                 placeholder="https://exemple.com/image.jpg"
                 value={imageUrlInput}
                 onChange={(e) => setImageUrlInput(e.target.value)}
-                style={{ flex: '1 1 260px', padding: 6, border: '1px solid #ccc', borderRadius: 4 }}
+                style={{
+                  flex: '1 1 260px',
+                  padding: 6,
+                  border: '1px solid #ccc',
+                  borderRadius: 4,
+                }}
               />
 
               <input
@@ -694,16 +628,24 @@ function CampaignFormModal({
                 placeholder="Largeur px (optionnel)"
                 value={imageWidthInput}
                 onChange={(e) => setImageWidthInput(e.target.value)}
-                style={{ width: 160, padding: 6, border: '1px solid #ccc', borderRadius: 4 }}
+                style={{
+                  width: 160,
+                  padding: 6,
+                  border: '1px solid #ccc',
+                  borderRadius: 4,
+                }}
               />
 
-              <button type="button" className="action-btn" onClick={handleInsertImage}>
+              <button
+                type="button"
+                className="action-btn"
+                onClick={handleInsertImage}
+              >
                 Insérer
               </button>
             </div>
           )}
 
-          {/* --- Zone d'édition (contentEditable) --- */}
           <div
             ref={editorRef}
             contentEditable
@@ -727,22 +669,16 @@ function CampaignFormModal({
             }}
           />
 
-          <small
-            style={{
-              display: 'block',
-              marginTop: 5,
-              color: '#666',
-            }}
-          >
-            Sélectionnez du texte pour appliquer une mise en forme (gras, italique, couleur...).
-            Les images sont ajoutées par URL — elles ne sont pas hébergées ici.
+          <small style={{ display: 'block', marginTop: 5, color: '#666' }}>
+            Sélectionnez du texte pour appliquer une mise en forme (gras,
+            italique, couleur...). Les images sont ajoutées par URL — elles ne
+            sont pas hébergées ici.
           </small>
         </div>
 
         {/* ================================================== */}
         {/* DESTINATAIRES */}
         {/* ================================================== */}
-
         <div className="form-group">
           <label>Destinataires :</label>
 
@@ -755,19 +691,9 @@ function CampaignFormModal({
             }}
           >
             {[
-              {
-                value: 'all',
-                label:
-                  'Tous les utilisateurs actifs',
-              },
-              {
-                value: 'manual',
-                label: 'Sélection manuelle',
-              },
-              {
-                value: 'filter',
-                label: 'Filtres automatiques',
-              },
+              { value: 'all', label: 'Tous les utilisateurs actifs' },
+              { value: 'manual', label: 'Sélection manuelle' },
+              { value: 'filter', label: 'Filtres automatiques' },
             ].map((opt) => (
               <label
                 key={opt.value}
@@ -781,24 +707,17 @@ function CampaignFormModal({
                 <input
                   type="radio"
                   name="targetType"
-                  checked={
-                    targetType === opt.value
-                  }
+                  checked={targetType === opt.value}
                   onChange={() => {
                     setTargetType(opt.value);
                     setPreview(null);
                     setError('');
                   }}
                 />
-
                 {opt.label}
               </label>
             ))}
           </div>
-
-          {/* ================================================= */}
-          {/* FILTRES */}
-          {/* ================================================= */}
 
           {targetType === 'filter' && (
             <div
@@ -814,14 +733,11 @@ function CampaignFormModal({
                   type="checkbox"
                   checked={neverOrdered}
                   onChange={(e) => {
-                    setNeverOrdered(
-                      e.target.checked
-                    );
+                    setNeverOrdered(e.target.checked);
                     setPreview(null);
                   }}
                   id="filter-never-ordered"
                 />
-
                 <label htmlFor="filter-never-ordered">
                   N'a jamais commandé
                 </label>
@@ -835,49 +751,32 @@ function CampaignFormModal({
                   marginBottom: 8,
                 }}
               >
-                <label
-                  style={{ marginBottom: 0 }}
-                >
-                  Inactif depuis (jours, aucune
-                  commande) :
+                <label style={{ marginBottom: 0 }}>
+                  Inactif depuis (jours, aucune commande) :
                 </label>
-
                 <input
                   type="number"
                   min="1"
                   style={{ width: 80 }}
                   value={inactiveDays}
                   onChange={(e) => {
-                    setInactiveDays(
-                      e.target.value
-                    );
+                    setInactiveDays(e.target.value);
                     setPreview(null);
                   }}
                 />
               </div>
 
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                }}
-              >
-                <label
-                  style={{ marginBottom: 0 }}
-                >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <label style={{ marginBottom: 0 }}>
                   Panier abandonné depuis (heures) :
                 </label>
-
                 <input
                   type="number"
                   min="1"
                   style={{ width: 80 }}
                   value={abandonedCartHours}
                   onChange={(e) => {
-                    setAbandonedCartHours(
-                      e.target.value
-                    );
+                    setAbandonedCartHours(e.target.value);
                     setPreview(null);
                   }}
                 />
@@ -885,12 +784,7 @@ function CampaignFormModal({
             </div>
           )}
 
-          {/* ================================================= */}
-          {/* UTILISATEURS MANUELS */}
-          {/* ================================================= */}
-
-          {(targetType === 'manual' ||
-            targetType === 'filter') && (
+          {(targetType === 'manual' || targetType === 'filter') && (
             <div>
               <p
                 style={{
@@ -908,11 +802,7 @@ function CampaignFormModal({
                 type="text"
                 placeholder="Rechercher par nom ou email..."
                 value={userSearch}
-                onChange={(e) =>
-                  setUserSearch(
-                    e.target.value
-                  )
-                }
+                onChange={(e) => setUserSearch(e.target.value)}
                 style={{
                   width: '100%',
                   padding: 8,
@@ -933,47 +823,30 @@ function CampaignFormModal({
                 }}
               >
                 {filteredUsers.map((u) => (
-                  <div
-                    key={u.id}
-                    className="checkbox-item"
-                  >
+                  <div key={u.id} className="checkbox-item">
                     <input
                       type="checkbox"
-                      checked={manualUserIds.includes(
-                        u.id
-                      )}
+                      checked={manualUserIds.includes(u.id)}
                       onChange={() => {
                         toggleManualUser(u.id);
                         setPreview(null);
                       }}
                       id={`manual-user-${u.id}`}
                     />
-
-                    <label
-                      htmlFor={`manual-user-${u.id}`}
-                    >
+                    <label htmlFor={`manual-user-${u.id}`}>
                       {u.name} — {u.email}
                     </label>
                   </div>
                 ))}
 
                 {filteredUsers.length === 0 && (
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: '0.85em',
-                    }}
-                  >
+                  <p style={{ margin: 0, fontSize: '0.85em' }}>
                     Aucun utilisateur trouvé.
                   </p>
                 )}
               </div>
             </div>
           )}
-
-          {/* ================================================= */}
-          {/* APERÇU */}
-          {/* ================================================= */}
 
           <button
             type="button"
@@ -982,32 +855,22 @@ function CampaignFormModal({
             className="action-btn"
             style={{ marginTop: 10 }}
           >
-            {isPreviewing
-              ? 'Calcul...'
-              : '🔍 Aperçu du nombre de destinataires'}
+            {isPreviewing ? 'Calcul...' : '🔍 Aperçu du nombre de destinataires'}
           </button>
 
           {preview && (
             <p style={{ marginTop: 8 }}>
-              <b>{preview.count}</b>{' '}
-              destinataire
+              <b>{preview.count}</b> destinataire
               {preview.count > 1 ? 's' : ''}
-
               {preview.sample?.length > 0 && (
-                <span
-                  style={{ color: '#666' }}
-                >
+                <span style={{ color: '#666' }}>
                   {' '}
                   (ex :{' '}
                   {preview.sample
                     .slice(0, 3)
                     .map((u) => u.name)
                     .join(', ')}
-
-                  {preview.count > 3
-                    ? '...'
-                    : ''}
-                  )
+                  {preview.count > 3 ? '...' : ''})
                 </span>
               )}
             </p>
@@ -1017,20 +880,16 @@ function CampaignFormModal({
         {/* ================================================== */}
         {/* PROGRAMMATION */}
         {/* ================================================== */}
-
         <div className="form-group checkbox-item">
           <input
             type="checkbox"
             id="schedule-enabled"
             checked={scheduleEnabled}
             onChange={(e) => {
-              setScheduleEnabled(
-                e.target.checked
-              );
+              setScheduleEnabled(e.target.checked);
               setError('');
             }}
           />
-
           <label htmlFor="schedule-enabled">
             Programmer l'envoi à une date/heure précise
           </label>
@@ -1042,70 +901,52 @@ function CampaignFormModal({
               type="datetime-local"
               value={scheduledAt}
               onChange={(e) => {
-                setScheduledAt(
-                  e.target.value
-                );
+                setScheduledAt(e.target.value);
                 setError('');
               }}
             />
           </div>
         )}
 
-        {/* ================================================== */}
-        {/* ERREUR */}
-        {/* ================================================== */}
-
-        {error && (
-          <p className="error-message-form">
-            {error}
-          </p>
-        )}
+        {error && <p className="error-message-form">{error}</p>}
 
         {/* ================================================== */}
         {/* BOUTONS */}
         {/* ================================================== */}
-
-        <div
-          className="form-actions"
-          style={{ flexWrap: 'wrap' }}
-        >
+        <div className="form-actions" style={{ flexWrap: 'wrap' }}>
           <button
             type="button"
-            onClick={() =>
-              handleSubmit('draft')
-            }
+            onClick={() => handleSubmit('draft')}
             disabled={isSaving}
             className="cancel-btn"
           >
-            Enregistrer en brouillon
+            {isEditMode ? 'Enregistrer en brouillon' : 'Enregistrer en brouillon'}
           </button>
 
           {scheduleEnabled ? (
             <button
               type="button"
-              onClick={() =>
-                handleSubmit('schedule')
-              }
+              onClick={() => handleSubmit('schedule')}
               disabled={isSaving}
               className="save-btn"
             >
               {isSaving
                 ? 'Enregistrement...'
+                : isEditMode
+                ? 'Mettre à jour'
                 : 'Programmer'}
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={() =>
-                handleSubmit('now')
-              }
-              disabled={isSaving}
-              className="save-btn"
-            >
-              {isSaving
-                ? 'Envoi...'
-                : 'Envoyer maintenant'}
-            </button>
+            !isEditMode && (
+              <button
+                type="button"
+                onClick={() => handleSubmit('now')}
+                disabled={isSaving}
+                className="save-btn"
+              >
+                {isSaving ? 'Envoi...' : 'Envoyer maintenant'}
+              </button>
+            )
           )}
 
           <button

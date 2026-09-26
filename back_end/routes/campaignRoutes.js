@@ -12,6 +12,7 @@ router.post('/preview', campaignController.previewRecipients);
 router.post('/', campaignController.createCampaign);
 router.get('/', campaignController.listCampaigns);
 router.get('/:id', campaignController.getCampaignDetails);
+router.put('/:id', campaignController.updateCampaign);
 router.post('/:id/send', campaignController.sendCampaignNow);
 router.delete('/:id', campaignController.deleteCampaign);
 
