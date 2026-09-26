@@ -15,6 +15,7 @@ import FreeShippingPage from './pages/FreeShippingPage';
 import ShippingZonesPage from './pages/ShippingZonesPage';
 import LoyaltyPage from './pages/LoyaltyPage';
 import CampaignsPage from './pages/CampaignsPage';
+import BannersManagementPage from './pages/BannersManagementPage';
 import { Mail } from 'lucide-react';
 
 import './App.css';
@@ -22,8 +23,10 @@ import './App.css';
 import {
   LayoutDashboard, ShoppingCart, Tag, Users, Settings, BarChart2,
   LogOut as LogOutIcon, ShieldCheck, FolderTree, ListOrdered,
-  ScanLine as ScanIcon, Menu as MenuIcon, X as XIcon, Ticket, Truck, MapPin, Award
+  ScanLine as ScanIcon, Menu as MenuIcon, X as XIcon, Ticket, Truck, MapPin, Award,
+  Image as ImageIcon
 } from 'lucide-react';
+
 
 // Composant pour la Sidebar
 const Sidebar = ({ handleLogout, isMobileOpen, onCloseMobile }) => {
@@ -43,6 +46,7 @@ const Sidebar = ({ handleLogout, isMobileOpen, onCloseMobile }) => {
     { path: "/reports", label: "Reports", Icon: BarChart2 },
     { path: "/scan-order", label: "Scanner Commande", Icon: ScanIcon },
     { path: "/campaigns", label: "Campagnes Email", Icon: Mail },
+    { path: "/banners", label: "Bannières", Icon: ImageIcon },
   ];
 
   return (
@@ -157,6 +161,7 @@ function App() {
         <Route path="/" element={ localStorage.getItem('adminToken') ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to={localStorage.getItem('adminToken') ? "/dashboard" : "/login"} replace />} />
         <Route path="/campaigns" element={<ProtectedRoute><CampaignsPage /></ProtectedRoute>}/>
+        <Route path="/banners" element={<ProtectedRoute><BannersManagementPage /></ProtectedRoute>}/>
       </Routes>
     </Router>
   );
