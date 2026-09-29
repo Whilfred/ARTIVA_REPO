@@ -222,12 +222,14 @@
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
-  overflow: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .um-table {
   width: 100%;
+  min-width: 900px;
   border-collapse: collapse;
   font-size: 0.92rem;
 }
@@ -482,22 +484,90 @@
 }
 
 /* ---------- Responsive ---------- */
-@media (max-width: 900px) {
+@media (max-width: 1200px) {
   .um-page { padding: 16px; }
+}
 
-  .um-table thead th:nth-child(3),
-  .um-table tbody td:nth-child(3),
-  .um-table thead th:nth-child(4),
-  .um-table tbody td:nth-child(4) {
-    display: none;
-  }
-
-  .um-user-name { max-width: 120px; }
+@media (max-width: 900px) {
+  .um-header { flex-direction: column; align-items: flex-start; }
+  .um-toolbar { flex-direction: column; align-items: stretch; }
+  .um-filter-select,
+  .um-btn-ghost { width: 100%; }
 }
 
 @media (max-width: 600px) {
-  .um-header { flex-direction: column; align-items: flex-start; }
-  .um-toolbar { flex-direction: column; align-items: stretch; }
-  .um-filter-select { width: 100%; }
-  .um-btn-ghost { width: 100%; }
+  .um-stats { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ---------- Nom en gras ---------- */
+.um-user-name {
+  font-weight: 700;
+  color: #111827;
+  font-size: 0.95rem;
+}
+
+/* ---------- Contact avec liens ---------- */
+.um-contact {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.um-contact-email {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.um-email-link {
+  color: #374151;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.um-email-link:hover {
+  color: #6366f1;
+  text-decoration: underline;
+}
+
+.um-contact-phone {
+  font-size: 0.82rem;
+  color: #6b7280;
+}
+
+.um-phone-link {
+  color: #6b7280;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.um-phone-link:hover {
+  color: #10b981;
+  text-decoration: underline;
+}
+
+/* ---------- Bouton menu ⋯ ---------- */
+.um-btn-menu {
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #6b7280;
+  width: 38px;
+  height: 34px;
+}
+
+.um-btn-menu:hover {
+  color: #111827;
+  background: #f3f4f6;
+}
+
+.um-menu-divider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 4px 6px;
+}
+
+/* Menu déroulant plus large (car textes plus longs) */
+.um-menu {
+  min-width: 230px;
 }

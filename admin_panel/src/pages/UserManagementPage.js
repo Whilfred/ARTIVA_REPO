@@ -33,7 +33,7 @@ function UserManagementPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  // Menu d'actions ouvert (par user id) — géré en state pour ne pas avoir mille boutons visibles
+  // Menu d'actions ouvert (par user id)
   const [openMenuId, setOpenMenuId] = useState(null);
 
   const adminToken = localStorage.getItem('adminToken');
@@ -210,7 +210,6 @@ function UserManagementPage() {
     });
   };
 
-  // Couleur d'avatar déterministe basée sur l'id (comme GitHub)
   const avatarColors = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#14b8a6'];
   const getAvatarColor = (id) => avatarColors[(Number(id) || 0) % avatarColors.length];
 
@@ -271,7 +270,7 @@ function UserManagementPage() {
         </div>
       </div>
 
-      {/* ---------- Barre de recherche + filtres ---------- */}
+      {/* ---------- Toolbar ---------- */}
       <div className="um-toolbar">
         <div className="um-search">
           <span className="um-search-icon">🔍</span>
@@ -363,14 +362,16 @@ function UserManagementPage() {
                     {/* Contact */}
                     <td>
                       <div className="um-contact">
-                        <div className="um-contact-line">
-                          <span className="um-contact-icon">✉️</span>
-                          <span>{user.email}</span>
+                        <div className="um-contact-email">
+                          <a href={`mailto:${user.email}`} className="um-email-link">
+                            {user.email}
+                          </a>
                         </div>
                         {user.phone && (
-                          <div className="um-contact-line um-muted">
-                            <span className="um-contact-icon">📞</span>
-                            <span>{user.phone}</span>
+                          <div className="um-contact-phone">
+                            <a href={`tel:${user.phone}`} className="um-phone-link">
+                              📞 {user.phone}
+                            </a>
                           </div>
                         )}
                       </div>
@@ -401,10 +402,7 @@ function UserManagementPage() {
                         <div className="um-status-cell">
                           <span className="um-badge um-badge-red">🚫 Bloqué</span>
                           {user.blocked_reason && (
-                            <div
-                              className="um-block-reason"
-                              title={user.blocked_reason}
-                            >
+                            <div className="um-block-reason" title={user.blocked_reason}>
                               {user.blocked_reason}
                             </div>
                           )}
@@ -419,83 +417,83 @@ function UserManagementPage() {
                       )}
                     </td>
 
-                    {/* Actions — menu déroulant */}
+                    {/* Actions — menu unique */}
                     <td style={{ textAlign: 'right' }}>
-                      <div className="um-actions">
+                      <div className="um-menu-container">
                         <button
-                          className="um-btn-icon"
-                          title="Voir panier & wishlist"
-                          onClick={() => handleOpenDetails(user)}
+                          className="um-btn-icon um-btn-menu"
+                          title="Actions"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenMenuId(openMenuId === user.id ? null : user.id);
+                          }}
                         >
-                          👁️
+                          ⋯
                         </button>
 
-                        <button
-                          className="um-btn-icon"
-                          title="Historique commandes"
-                          onClick={() => handleOpenHistory(user)}
-                        >
-                          📜
-                        </button>
+                        {openMenuId === user.id && (
+                          <div className="um-menu" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              className="um-menu-item"
+                              onClick={() => { setOpenMenuId(null); handleOpenDetails(user); }}
+                            >
+                              👁️ Voir panier & wishlist
+                            </button>
 
-                        <div className="um-menu-container">
-                          <button
-                            className="um-btn-icon"
-                            title="Plus d'actions"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setOpenMenuId(openMenuId === user.id ? null : user.id);
-                            }}
-                          >
-                            ⋯
-                          </button>
+                            <button
+                              className="um-menu-item"
+                              onClick={() => { setOpenMenuId(null); handleOpenHistory(user); }}
+                            >
+                              📜 Historique commandes
+                            </button>
 
-                          {openMenuId === user.id && (
-                            <div className="um-menu" onClick={(e) => e.stopPropagation()}>
-                              <button
-                                className="um-menu-item"
-                                onClick={() => { setOpenMenuId(null); handleOpenModalForEdit(user); }}
-                                disabled={user.is_deleted}
-                              >
-                                ✎ Modifier
-                              </button>
+                            <div className="um-menu-divider" />
 
-                              {!isAnonymized && (
-                                isBlocked ? (
-                                  <button
-                                    className="um-menu-item"
-                                    onClick={() => { setOpenMenuId(null); handleUnblockUser(user.id, user.name); }}
-                                  >
-                                    ✅ Débloquer
-                                  </button>
-                                ) : (
-                                  <button
-                                    className="um-menu-item"
-                                    onClick={() => { setOpenMenuId(null); handleOpenBlockModal(user); }}
-                                  >
-                                    🚫 Bloquer
-                                  </button>
-                                )
-                              )}
+                            <button
+                              className="um-menu-item"
+                              onClick={() => { setOpenMenuId(null); handleOpenModalForEdit(user); }}
+                              disabled={user.is_deleted}
+                            >
+                              ✎ Modifier
+                            </button>
 
-                              <button
-                                className="um-menu-item"
-                                onClick={() => { setOpenMenuId(null); handleAnonymizeUser(user.id, user.name); }}
-                                disabled={user.is_deleted}
-                              >
-                                🕶️ Anonymiser
-                              </button>
+                            {!isAnonymized && (
+                              isBlocked ? (
+                                <button
+                                  className="um-menu-item"
+                                  onClick={() => { setOpenMenuId(null); handleUnblockUser(user.id, user.name); }}
+                                >
+                                  ✅ Débloquer
+                                </button>
+                              ) : (
+                                <button
+                                  className="um-menu-item"
+                                  onClick={() => { setOpenMenuId(null); handleOpenBlockModal(user); }}
+                                >
+                                  🚫 Bloquer
+                                </button>
+                              )
+                            )}
 
-                              <button
-                                className="um-menu-item um-menu-item-danger"
-                                onClick={() => { setOpenMenuId(null); handleDeleteUser(user.id, user.name); }}
-                                disabled={user.is_deleted}
-                              >
-                                🗑️ Supprimer
-                              </button>
-                            </div>
-                          )}
-                        </div>
+                            <button
+                              className="um-menu-item"
+                              onClick={() => { setOpenMenuId(null); handleAnonymizeUser(user.id, user.name); }}
+                              disabled={user.is_deleted}
+                            >
+                              🕶️ Anonymiser
+                            </button>
+
+                            <div className="um-menu-divider" />
+
+                            <button
+                              className="um-menu-item um-menu-item-danger"
+                              onClick={() => { setOpenMenuId(null); handleDeleteUser(user.id, user.name); }}
+                              disabled={user.is_deleted}
+                            >
+                              🗑️ Supprimer
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </td>
                   </tr>
