@@ -1415,6 +1415,87 @@ const sendClickReminderEmail = async (to, name, { products }) => {
   );
 };
 
+// =============================================================================
+// EMAIL : Demande d'avis (2h après livraison)
+// =============================================================================
+
+const sendReviewRequestEmail = async (to, name, { orderNumber }) => {
+  const FACEBOOK_URL = 'https://www.facebook.com/share/19XufxnCKV/';
+  const TIKTOK_URL = 'https://www.tiktok.com/@artiva548';
+
+  const htmlContent = carteEmail({
+    titre: '⭐ Votre avis nous intéresse !',
+    couleur: '#FF6B00',
+    corps: `
+      <p style="font-size:16px;">
+        Bonjour ${name || 'Cher client'},
+      </p>
+      <p style="font-size:15px;">
+        Nous espérons que vous êtes satisfait${name ? '' : '(e)'} de votre commande
+        <b>#${orderNumber}</b> ! 🎉
+      </p>
+      <p style="font-size:15px;">
+        Votre avis compte énormément pour nous. Il nous aide à nous améliorer
+        et permet à d'autres clients de découvrir Artiva en confiance.
+      </p>
+
+      <div style="background:#FFF3E0; padding:20px; border-radius:10px; margin:24px 0; text-align:center;">
+        <p style="font-size:15px; font-weight:bold; color:#FF6B00; margin:0 0 14px 0;">
+          Laissez-nous un avis en 30 secondes ⏱️
+        </p>
+
+        <a href="${FACEBOOK_URL}" style="
+          display:inline-block;
+          background:#1877F2;
+          color:#fff;
+          padding:12px 24px;
+          text-decoration:none;
+          border-radius:8px;
+          font-weight:700;
+          font-size:14px;
+          margin:4px;
+        ">
+          📘 Facebook
+        </a>
+
+        <a href="${TIKTOK_URL}" style="
+          display:inline-block;
+          background:#000;
+          color:#fff;
+          padding:12px 24px;
+          text-decoration:none;
+          border-radius:8px;
+          font-weight:700;
+          font-size:14px;
+          margin:4px;
+        ">
+          🎵 TikTok
+        </a>
+      </div>
+
+      <p style="font-size:14px; color:#666; text-align:center;">
+        Ou répondez simplement à cet email pour nous faire part de votre expérience 💬
+      </p>
+
+      <p style="font-size:15px; text-align:center; margin-top:20px;">
+        Merci de faire partie de l'aventure Artiva ! 🙏
+      </p>
+    `,
+    pied: "L'équipe Artiva — Merci pour votre confiance",
+  });
+
+  await sendMailWithLog(
+    {
+      fromName: 'Artiva ⭐',
+      fromEmail: 'artiva.app@gmail.com',
+      to,
+      subject: `⭐ Votre avis sur votre commande #${orderNumber}`,
+      html: htmlContent,
+    },
+    'Review-Request'
+  );
+};
+
 module.exports = {
   sendLoginCode,
   sendResetPasswordCode,
@@ -1433,4 +1514,5 @@ module.exports = {
   sendActivityBatchEmail,
   sendAccountBlockedEmail,
   sendClickReminderEmail,
+  sendReviewRequestEmail,
 };
