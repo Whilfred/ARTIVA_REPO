@@ -1325,6 +1325,96 @@ const sendActivityBatchEmail = async (adminEmail, { activities, period }) => {
   );
 };
 
+// =============================================================================
+// EMAIL : Rappel de produits vus (24h après un clic)
+// =============================================================================
+
+const sendClickReminderEmail = async (to, name, { products }) => {
+  const fcfa = (v) => `${Number(v || 0).toLocaleString('fr-FR')} FCFA`;
+  const count = products.length;
+
+  // Ligne d'un produit dans le tableau
+  const rows = products
+    .map((p) => {
+      const isOutOfStock = Number(p.stock || 0) <= 0;
+      const imageCell = p.image_url
+        ? `<img src="${p.image_url}" alt="${p.name}" style="width:60px;height:60px;object-fit:cover;border-radius:8px;vertical-align:middle;margin-right:12px;border:1px solid #e5e7eb;" />`
+        : '<span style="display:inline-block;width:60px;height:60px;background:#f3f4f6;border-radius:8px;line-height:60px;text-align:center;font-size:20px;margin-right:12px;">📦</span>';
+
+      const stockBadge = isOutOfStock
+        ? '<div style="display:inline-block;margin-top:4px;padding:2px 8px;background:#fef3c7;color:#92400e;border-radius:999px;font-size:11px;font-weight:600;">⏳ Bientôt de retour</div>'
+        : '<div style="display:inline-block;margin-top:4px;padding:2px 8px;background:#dcfce7;color:#166534;border-radius:999px;font-size:11px;font-weight:600;">✅ En stock</div>';
+
+      return `
+        <tr style="border-bottom:1px solid #f3f4f6;">
+          <td style="padding:14px 8px; vertical-align:top;">
+            ${imageCell}
+            <div style="display:inline-block;vertical-align:middle;max-width:180px;">
+              <div style="font-weight:700;color:#111827;font-size:14px;line-height:1.3;">${p.name}</div>
+              ${stockBadge}
+            </div>
+          </td>
+          <td style="padding:14px 8px; text-align:right; vertical-align:middle; font-weight:700; color:#FF6B00; font-size:15px; white-space:nowrap;">
+            ${fcfa(p.price)}
+          </td>
+        </tr>
+      `;
+    })
+    .join('');
+
+  const htmlContent = carteEmail({
+    titre: '👀 Vous avez regardé ces articles...',
+    couleur: '#FF6B00',
+    corps: `
+      <p style="font-size:16px;">
+        Bonjour ${name || 'Cher client'},
+      </p>
+      <p style="font-size:15px;">
+        ${count > 1
+          ? `Vous avez récemment regardé <b>${count} articles</b> sur Artiva. Ils sont toujours disponibles !`
+          : `Vous avez récemment regardé cet article sur Artiva. Il est toujours disponible !`}
+      </p>
+
+      <table style="width:100%; border-collapse:collapse; margin-top:16px; background:#fafbfc; border-radius:8px; overflow:hidden;">
+        <tbody>${rows}</tbody>
+      </table>
+
+      <div style="text-align:center; margin:28px 0;">
+        <a href="https://artiva.app/catalog" style="
+          background:#FF6B00;
+          color:#fff;
+          padding:14px 35px;
+          text-decoration:none;
+          border-radius:8px;
+          font-weight:700;
+          font-size:15px;
+          display:inline-block;
+        ">
+          🛍️ Revoir ces articles
+        </a>
+      </div>
+
+      <p style="font-size:13px; color:#888; text-align:center; margin-top:10px;">
+        💡 Ne tardez pas, nos stocks sont limités.
+      </p>
+    `,
+    pied: "L'équipe Artiva — Vos articles préférés",
+  });
+
+  await sendMailWithLog(
+    {
+      fromName: 'Artiva 👀',
+      fromEmail: 'artiva.app@gmail.com',
+      to,
+      subject: count > 1
+        ? `👀 Vous avez regardé ${count} articles sur Artiva`
+        : `👀 Vous avez regardé "${products[0].name}"`,
+      html: htmlContent,
+    },
+    'Click-Reminder'
+  );
+};
+
 module.exports = {
   sendLoginCode,
   sendResetPasswordCode,
@@ -1342,4 +1432,5 @@ module.exports = {
   sendCartReminderEmail,
   sendActivityBatchEmail,
   sendAccountBlockedEmail,
+  sendClickReminderEmail,
 };

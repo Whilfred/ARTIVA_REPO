@@ -268,3 +268,131 @@ exports.deleteUserClicks = async (req, res) => {
     res.status(500).json({ message: 'Erreur serveur' });
   }
 };
+
+// =============================================================================
+// GET /api/admin/tracking/click-reminders (ADMIN)
+// Liste des rappels de clics envoyés
+// =============================================================================
+
+exports.getClickReminders = async (req, res) => {
+  const { user_id, period = '30', limit = 100, offset = 0 } = req.query;
+
+  try {
+    const conditions = [`cr.sent_at > NOW() - ($1::text || ' days')::interval`];
+    const params = [period];
+    let paramIndex = 2;
+
+    if (user_id) {
+      conditions.push(`cr.user_id = $${paramIndex++}`);
+      params.push(parseInt(user_id, 10));
+    }
+
+    const whereClause = `WHERE ${conditions.join(' AND ')}`;
+
+    const result = await db.query(
+      `
+      SELECT
+        cr.id,
+        cr.user_id,
+        u.name AS user_name,
+        u.email AS user_email,
+        cr.sent_at,
+        cr.product_count,
+        cr.product_ids,
+        cr.email_sent,
+        cr.push_sent,
+        cr.error_message
+      FROM click_reminders cr
+      LEFT JOIN users u ON u.id = cr.user_id
+      ${whereClause}
+      ORDER BY cr.sent_at DESC
+      LIMIT $${paramIndex++} OFFSET $${paramIndex++}
+      `,
+      [...params, parseInt(limit, 10), parseInt(offset, 10)]
+    );
+
+    const countResult = await db.query(
+      `SELECT COUNT(*)::int AS total FROM click_reminders cr ${whereClause}`,
+      params
+    );
+
+    res.json({
+      reminders: result.rows,
+      total: countResult.rows[0].total,
+    });
+  } catch (error) {
+    console.error('Erreur click reminders:', error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+};
+
+// =============================================================================
+// GET /api/admin/tracking/click-reminders/stats (ADMIN)
+// Statistiques globales des rappels de clics
+// =============================================================================
+
+exports.getClickRemindersStats = async (req, res) => {
+  const { period = '30' } = req.query;
+
+  try {
+    // Stats globales
+    const globalResult = await db.query(
+      `
+      SELECT
+        COUNT(*)::int AS total_reminders,
+        COUNT(DISTINCT user_id)::int AS unique_users,
+        SUM(CASE WHEN email_sent THEN 1 ELSE 0 END)::int AS emails_envoyes,
+        SUM(CASE WHEN push_sent THEN 1 ELSE 0 END)::int AS pushs_envoyees,
+        SUM(CASE WHEN error_message IS NOT NULL THEN 1 ELSE 0 END)::int AS erreurs,
+        ROUND(AVG(product_count), 1) AS avg_products
+      FROM click_reminders
+      WHERE sent_at > NOW() - ($1::text || ' days')::interval
+      `,
+      [period]
+    );
+
+    // Par jour
+    const byDayResult = await db.query(
+      `
+      SELECT
+        DATE(sent_at) AS date,
+        COUNT(*)::int AS reminders,
+        COUNT(DISTINCT user_id)::int AS users,
+        SUM(CASE WHEN email_sent THEN 1 ELSE 0 END)::int AS emails
+      FROM click_reminders
+      WHERE sent_at > NOW() - ($1::text || ' days')::interval
+      GROUP BY DATE(sent_at)
+      ORDER BY DATE(sent_at) ASC
+      `,
+      [period]
+    );
+
+    // Top users relancés
+    const topUsersResult = await db.query(
+      `
+      SELECT
+        u.id AS user_id,
+        u.name,
+        u.email,
+        COUNT(cr.id)::int AS total_reminders,
+        MAX(cr.sent_at) AS last_reminder
+      FROM click_reminders cr
+      JOIN users u ON u.id = cr.user_id
+      WHERE cr.sent_at > NOW() - ($1::text || ' days')::interval
+      GROUP BY u.id
+      ORDER BY total_reminders DESC
+      LIMIT 10
+      `,
+      [period]
+    );
+
+    res.json({
+      overview: globalResult.rows[0],
+      byDay: byDayResult.rows,
+      topUsers: topUsersResult.rows,
+    });
+  } catch (error) {
+    console.error('Erreur stats click reminders:', error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+};

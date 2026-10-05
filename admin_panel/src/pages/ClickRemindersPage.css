@@ -1,0 +1,340 @@
+/* ============================================================================
+   ClickRemindersPage.css — Design de la page des rappels de clics
+   ============================================================================ */
+
+.crm-page {
+  max-width: 1300px;
+  margin: 0 auto;
+  padding: 24px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #111827;
+}
+
+.crm-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.crm-header h1 {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+}
+
+.crm-subtitle {
+  margin: 4px 0 0;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.crm-back-link {
+  display: inline-block;
+  margin-bottom: 20px;
+  color: #6366f1;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.crm-back-link:hover { text-decoration: underline; }
+
+.crm-loading {
+  text-align: center;
+  padding: 60px;
+  color: #6b7280;
+}
+
+/* ---------- Stats ---------- */
+.crm-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.crm-stat-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+
+.crm-stat-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.crm-stat-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #111827;
+  margin-top: 4px;
+  line-height: 1;
+}
+
+.crm-stat-blue   { border-left: 4px solid #3b82f6; }
+.crm-stat-blue   .crm-stat-value { color: #1e40af; }
+.crm-stat-green  { border-left: 4px solid #10b981; }
+.crm-stat-green  .crm-stat-value { color: #166534; }
+.crm-stat-purple { border-left: 4px solid #8b5cf6; }
+.crm-stat-purple .crm-stat-value { color: #5b21b6; }
+.crm-stat-orange { border-left: 4px solid #f59e0b; }
+.crm-stat-orange .crm-stat-value { color: #92400e; }
+.crm-stat-red    { border-left: 4px solid #ef4444; }
+.crm-stat-red    .crm-stat-value { color: #991b1b; }
+
+/* ---------- Toolbar ---------- */
+.crm-toolbar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.crm-search {
+  position: relative;
+  flex: 1 1 300px;
+  min-width: 220px;
+}
+
+.crm-search-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.crm-search-input {
+  width: 100%;
+  padding: 11px 40px 11px 40px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.crm-search-input:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+.crm-search-clear {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #f3f4f6;
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  color: #6b7280;
+  font-size: 0.75rem;
+}
+
+.crm-search-clear:hover { background: #e5e7eb; }
+
+.crm-filter-select {
+  padding: 11px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #fff;
+  font-size: 0.92rem;
+  cursor: pointer;
+  outline: none;
+  min-width: 180px;
+}
+
+.crm-filter-select:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+.crm-btn-ghost {
+  padding: 11px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #4b5563;
+}
+
+.crm-btn-ghost:hover:not(:disabled) { background: #f9fafb; }
+.crm-btn-ghost:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* ---------- Messages ---------- */
+.crm-error {
+  background: #fee2e2;
+  color: #991b1b;
+  padding: 12px 16px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+  border-left: 4px solid #dc2626;
+  font-size: 0.9rem;
+}
+
+.crm-counter {
+  margin-bottom: 12px;
+  color: #666;
+  font-size: 0.9em;
+}
+
+.crm-loading-bar {
+  text-align: center;
+  color: #6b7280;
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+}
+
+/* ---------- Tableau ---------- */
+.crm-table-wrapper {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow-x: auto;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.crm-table {
+  width: 100%;
+  min-width: 700px;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.crm-table thead th {
+  text-align: left;
+  padding: 14px 16px;
+  background: #f9fafb;
+  font-weight: 600;
+  color: #374151;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #e5e7eb;
+  white-space: nowrap;
+}
+
+.crm-table tbody td {
+  padding: 14px 16px;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: middle;
+}
+
+.crm-table tbody tr:last-child td { border-bottom: none; }
+.crm-table tbody tr:hover { background: #fafbfc; }
+
+.crm-empty {
+  text-align: center;
+  padding: 60px 20px !important;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.crm-date { color: #4b5563; font-size: 0.88rem; white-space: nowrap; }
+
+/* ---------- User ---------- */
+.crm-user { min-width: 0; }
+
+.crm-user-name {
+  font-weight: 700;
+  color: #111827;
+  font-size: 0.95rem;
+}
+
+.crm-user-email {
+  font-size: 0.82rem;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+/* ---------- Badges ---------- */
+.crm-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.crm-badge-products {
+  background: #eef2ff;
+  color: #3730a3;
+}
+
+.crm-badge-email {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.crm-badge-push {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.crm-badge-error {
+  background: #fee2e2;
+  color: #991b1b;
+  cursor: help;
+}
+
+.crm-status {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* ---------- Pagination ---------- */
+.crm-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.crm-pagination button {
+  padding: 8px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.crm-pagination button:hover:not(:disabled) { background: #f9fafb; }
+.crm-pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.crm-pagination span {
+  font-size: 0.9rem;
+  color: #6b7280;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 900px) {
+  .crm-page { padding: 16px; }
+  .crm-header { flex-direction: column; align-items: flex-start; }
+  .crm-toolbar { flex-direction: column; align-items: stretch; }
+  .crm-filter-select { width: 100%; }
+}
+
+@media (max-width: 600px) {
+  .crm-stats { grid-template-columns: repeat(2, 1fr); }
+}

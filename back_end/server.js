@@ -5,7 +5,9 @@ const { startCampaignScheduler } = require('./utils/campaignScheduler');
 const { startReviewScheduler } = require('./utils/reviewScheduler');
 const { startCartScheduler } = require('./utils/cartScheduler');
 const { startWishlistReminderScheduler } = require('./utils/wishlistReminderScheduler');
+const { startClickReminderScheduler } = require('./utils/clickReminderScheduler');   // ← NOUVEAU
 const { startActivityBatchScheduler } = require('./utils/activityBatchScheduler'); // ⚠️ DÉSACTIVÉ
+
 const PORT = process.env.PORT || 3001;
 
 async function startServer() {
@@ -22,6 +24,7 @@ async function startServer() {
       startReviewScheduler();
       startCartScheduler();
       startWishlistReminderScheduler();
+      startClickReminderScheduler();       // ← NOUVEAU
       startActivityBatchScheduler();
     });
 
