@@ -20,7 +20,7 @@ const HEURES_APRES_LIVRAISON = 2;
 const FENETRE_HEURES = 3;
 
 function startReviewScheduler() {
-  cron.schedule('* * * * *', async () => {
+  cron.schedule('20 * * * *', async () => {
     console.log('[ReviewScheduler] Vérification des demandes d\'avis à envoyer...');
 
     try {
