@@ -44,10 +44,10 @@ const loginAdmin = async (req, res) => {
     if (!isMatch)
       return res.status(401).json({ message: "Email ou mot de passe incorrect" });
 
+    // ✅ MODIFIÉ : Plus de expiresIn, le token n'expire jamais
     const token = jwt.sign(
       { id: admin.id, email: admin.email, role: admin.role },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
+      process.env.JWT_SECRET
     );
 
     const { password_hash, ...safeAdmin } = admin;
@@ -71,14 +71,12 @@ function generateCode() {
 // ==========================
 async function notifyUserLogin(userId, userName, userEmail, isFirstLogin) {
   try {
-    // 1. Récupérer le token FCM de l'utilisateur
     const userResult = await db.query(
       'SELECT fcm_token FROM users WHERE id = $1',
       [userId]
     );
     const userFcmToken = userResult.rows[0]?.fcm_token;
 
-    // 📝 Logger l'activité de connexion
     try {
       await logActivity({
         userId,
@@ -93,7 +91,6 @@ async function notifyUserLogin(userId, userName, userEmail, isFirstLogin) {
       console.error('Erreur log app_login:', logErr.message);
     }
 
-    // 2. Push à l'utilisateur
     if (userFcmToken) {
       try {
         await sendPushNotification(userFcmToken, {
@@ -111,7 +108,6 @@ async function notifyUserLogin(userId, userName, userEmail, isFirstLogin) {
       console.log(`ℹ️ Pas de token FCM pour user ${userId}`);
     }
 
-    // 3. Email à l'utilisateur
     try {
       await sendWelcomeBackEmail(userEmail, userName);
       console.log(`📧 Email de connexion envoyé à ${userEmail}`);
@@ -119,7 +115,6 @@ async function notifyUserLogin(userId, userName, userEmail, isFirstLogin) {
       console.error(`❌ Erreur email connexion à ${userEmail}:`, emailError.message);
     }
 
-    // 4. ✅ Notifier UNIQUEMENT artiva.app@gmail.com (email)
     try {
       await sendAdminUserLoginEmail(ADMIN_NOTIFY_EMAIL, {
         name: userName,
@@ -132,7 +127,6 @@ async function notifyUserLogin(userId, userName, userEmail, isFirstLogin) {
       console.error(`❌ Erreur email admin ${ADMIN_NOTIFY_EMAIL}:`, emailError.message);
     }
 
-    // 4 bis. Push à artiva.app@gmail.com (si token FCM existe)
     try {
       const notifyUserResult = await db.query(
         'SELECT fcm_token FROM admin WHERE email = $1 AND fcm_token IS NOT NULL',
@@ -153,7 +147,6 @@ async function notifyUserLogin(userId, userName, userEmail, isFirstLogin) {
       console.error(`❌ Erreur push admin ${ADMIN_NOTIFY_EMAIL}:`, pushError.message);
     }
 
-    // 5. Mettre à jour last_login_at
     await db.query(
       'UPDATE users SET last_login_at = NOW() WHERE id = $1',
       [userId]
@@ -259,7 +252,6 @@ const registerUser = async (req, res) => {
 
     const user = newUser.rows[0];
 
-    // 📝 Logger l'inscription
     try {
       await logActivity({
         userId: user.id,
@@ -274,7 +266,6 @@ const registerUser = async (req, res) => {
       console.error('Erreur log user_register:', logErr.message);
     }
 
-    // ✅ ENVOI DES DEUX EMAILS : BIENVENUE + CADEAU WOUHOU
     try {
       await Promise.all([
         sendWelcomeEmail(email, name),
@@ -314,7 +305,6 @@ const loginUser = async (req, res) => {
     if (!isMatch)
       return res.status(401).json({ message: "Email ou mot de passe incorrect" });
 
-    // ✅ NOUVEAU : Vérification compte supprimé / bloqué AVANT l'envoi du code 2FA
     if (user.is_deleted) {
       return res.status(403).json({
         message: "Ce compte a été supprimé. Contactez le support.",
@@ -354,7 +344,6 @@ const verifyLoginCode = async (req, res) => {
     return res.status(400).json({ message: "Email et code requis" });
 
   try {
-    // ✅ NOUVEAU : on ajoute is_active et is_deleted dans le SELECT
     const userResult = await db.query(
       "SELECT id, email, name, role, last_login_at, is_active, is_deleted FROM users WHERE email=$1",
       [email]
@@ -364,7 +353,6 @@ const verifyLoginCode = async (req, res) => {
 
     const user = userResult.rows[0];
 
-    // ✅ NOUVEAU : Sécurité — vérifier que le compte est toujours actif (au cas où il aurait été bloqué entre les 2 étapes)
     if (user.is_deleted) {
       return res.status(403).json({
         message: "Ce compte a été supprimé.",
@@ -391,18 +379,16 @@ const verifyLoginCode = async (req, res) => {
 
     await db.query("UPDATE login_codes SET is_used=true WHERE id=$1", [codeResult.rows[0].id]);
 
+    // ✅ MODIFIÉ : Plus de expiresIn, le token n'expire jamais
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
+      process.env.JWT_SECRET
     );
 
     const isFirstLogin = !user.last_login_at;
 
-    // Répondre IMMÉDIATEMENT
     res.json({ token, user, message: "Connexion validée avec succès" });
 
-    // ✅ En arrière-plan : notifier
     setImmediate(() => {
       notifyUserLogin(user.id, user.name, user.email, isFirstLogin)
         .catch((err) => console.error("Erreur notifyUserLogin:", err));
@@ -458,7 +444,6 @@ const googleAuth = async (req, res) => {
   }
 
   try {
-    // ✅ NOUVEAU : ajout de is_deleted dans le SELECT
     let userResult = await db.query(
       `SELECT id, name, email, role, picture, google_id, is_active, is_deleted, created_at, last_login_at 
        FROM users 
@@ -505,7 +490,6 @@ const googleAuth = async (req, res) => {
       }
 
     } else {
-      // ✅ NOUVEAU : Vérifier compte supprimé / bloqué AVANT de mettre à jour
       const existingUser = userResult.rows[0];
       if (existingUser.is_deleted) {
         return res.status(403).json({
@@ -538,10 +522,10 @@ const googleAuth = async (req, res) => {
       console.log(`[Google Auth] Utilisateur existant mis à jour: ${email} (1ère connexion: ${isFirstLogin})`);
     }
 
+    // ✅ MODIFIÉ : Plus de expiresIn, le token n'expire jamais
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
+      process.env.JWT_SECRET
     );
 
     res.json({
