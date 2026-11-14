@@ -14,7 +14,7 @@ const {
  * Envoie la séquence de rétention selon l'âge du compte.
  */
 function startMarketingScheduler() {
-cron.schedule('* * * * *', async () => {
+cron.schedule('0 10 * * *', async () => {
     console.log('[MarketingScheduler] Vérification des emails marketing à envoyer...');
 
     try {
