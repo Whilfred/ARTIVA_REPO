@@ -1496,6 +1496,196 @@ const sendReviewRequestEmail = async (to, name, { orderNumber }) => {
   );
 };
 
+// =============================================================================
+// SÉQUENCE MARKETING AUTOMATIQUE (4 emails)
+// =============================================================================
+
+// Email J+1h (si n'a pas encore commandé)
+const sendInactiveUserEmail = async (to, name) => {
+  const htmlContent = carteEmail({
+    titre: "🛒 Votre panier vous attend chez Artiva !",
+    couleur: "#FF6B00",
+    corps: `
+      <p style="font-size:16px;">Bonjour ${name || 'Cher client'},</p>
+      <p style="font-size:15px;">
+        Nous avons remarqué que vous n'avez pas encore passé votre première commande sur Artiva.
+      </p>
+      <p style="font-size:15px;">
+        N'attendez plus ! Découvrez notre catalogue de produits artisanaux authentiques, livrés directement chez vous.
+      </p>
+      <p style="font-size:15px;">
+        Et en plus, votre <b>bon d'achat de 2000 FCFA</b> de bienvenue vous attend toujours ! 🎁
+      </p>
+      <div style="text-align:center; margin:24px 0;">
+        <a href="https://artiva.app/catalog" style="
+          background:#FF6B00; color:white; padding:14px 35px;
+          text-decoration:none; border-radius:8px; font-weight:bold; display:inline-block;
+        ">
+          🛒 Découvrir le catalogue
+        </a>
+      </div>
+      <p style="font-size:14px; color:#666; text-align:center;">
+        À bientôt sur Artiva ! ✨
+      </p>
+    `,
+    pied: "L'équipe Artiva",
+  });
+
+  await sendMailWithLog(
+    {
+      fromName: "Artiva 🛒",
+      fromEmail: "artiva.app@gmail.com",
+      to,
+      subject: "🛒 N'oubliez pas votre bon d'achat de 2000 FCFA !",
+      html: htmlContent,
+    },
+    "Inactive-User"
+  );
+};
+
+// Email J+6 (Nouveaux produits)
+const sendNewProductsEmail = async (to, name, products) => {
+  const rows = products.map(p => `
+    <tr style="border-bottom:1px solid #f3f4f6;">
+      <td style="padding:12px 8px; vertical-align:middle;">
+        ${p.image_url ? `<img src="${p.image_url}" style="width:50px;height:50px;object-fit:cover;border-radius:6px;margin-right:10px;vertical-align:middle;" />` : '📦 '}
+        <b style="color:#111827;font-size:14px;">${p.name}</b>
+      </td>
+      <td style="padding:12px 8px; text-align:right; font-weight:bold; color:#FF6B00; vertical-align:middle;">
+        ${Number(p.price).toLocaleString("fr-FR")} F
+      </td>
+    </tr>
+  `).join('');
+
+  const htmlContent = carteEmail({
+    titre: "🆕 Les nouveautés de la semaine !",
+    couleur: "#4CAF50",
+    corps: `
+      <p style="font-size:16px;">Bonjour ${name || 'Cher client'},</p>
+      <p style="font-size:15px;">
+        Découvrez les derniers produits qui viennent d'arriver sur Artiva :
+      </p>
+      <table style="width:100%; border-collapse:collapse; margin:16px 0; background:#fafbfc; border-radius:8px;">
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="text-align:center; margin:24px 0;">
+        <a href="https://artiva.app/catalog" style="
+          background:#4CAF50; color:white; padding:14px 35px;
+          text-decoration:none; border-radius:8px; font-weight:bold; display:inline-block;
+        ">
+          🛍️ Voir toutes les nouveautés
+        </a>
+      </div>
+    `,
+    pied: "L'équipe Artiva",
+  });
+
+  await sendMailWithLog(
+    {
+      fromName: "Artiva 🆕",
+      fromEmail: "artiva.app@gmail.com",
+      to,
+      subject: "🆕 Découvrez les nouveaux produits de la semaine !",
+      html: htmlContent,
+    },
+    "New-Products"
+  );
+};
+
+// Email J+12 & J+18 (Catégorie préférée)
+const sendFavoriteCategoryEmail = async (to, name, categoryName, products) => {
+  const rows = products.map(p => `
+    <tr style="border-bottom:1px solid #f3f4f6;">
+      <td style="padding:12px 8px; vertical-align:middle;">
+        ${p.image_url ? `<img src="${p.image_url}" style="width:50px;height:50px;object-fit:cover;border-radius:6px;margin-right:10px;vertical-align:middle;" />` : '📦 '}
+        <b style="color:#111827;font-size:14px;">${p.name}</b>
+      </td>
+      <td style="padding:12px 8px; text-align:right; font-weight:bold; color:#e91e63; vertical-align:middle;">
+        ${Number(p.price).toLocaleString("fr-FR")} F
+      </td>
+    </tr>
+  `).join('');
+
+  const htmlContent = carteEmail({
+    titre: "💝 Ça devrait vous plaire !",
+    couleur: "#e91e63",
+    corps: `
+      <p style="font-size:16px;">Bonjour ${name || 'Cher client'},</p>
+      <p style="font-size:15px;">
+        Nous avons remarqué que vous aimiez la catégorie <b>${categoryName}</b>.
+      </p>
+      <p style="font-size:15px;">
+        Voici des articles qui pourraient vous intéresser :
+      </p>
+      <table style="width:100%; border-collapse:collapse; margin:16px 0; background:#fafbfc; border-radius:8px;">
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="text-align:center; margin:24px 0;">
+        <a href="https://artiva.app/catalog" style="
+          background:#e91e63; color:white; padding:14px 35px;
+          text-decoration:none; border-radius:8px; font-weight:bold; display:inline-block;
+        ">
+          ❤️ Découvrir ces produits
+        </a>
+      </div>
+    `,
+    pied: "L'équipe Artiva",
+  });
+
+  await sendMailWithLog(
+    {
+      fromName: "Artiva 💝",
+      fromEmail: "artiva.app@gmail.com",
+      to,
+      subject: `💝 Des nouveautés dans votre catégorie préférée : ${categoryName}`,
+      html: htmlContent,
+    },
+    "Favorite-Category"
+  );
+};
+
+// Email J+24 (Offre spéciale)
+const sendSpecialOfferEmail = async (to, name) => {
+  const htmlContent = carteEmail({
+    titre: "🎁 Une surprise pour vous !",
+    couleur: "#FF6B00",
+    corps: `
+      <p style="font-size:16px;">Bonjour ${name || 'Cher client'},</p>
+      <p style="font-size:15px;">
+        Cela fait bientôt un mois que vous nous avez rejoints, et nous tenions à vous remercier !
+      </p>
+      <p style="font-size:15px;">
+        Pour l'occasion, nous vous offrons la <b>livraison gratuite</b> sur votre prochaine commande.
+      </p>
+      <div style="background:#FFF3E0; padding:15px; text-align:center; border-radius:8px; margin:20px 0;">
+        <p style="margin:0; font-size:15px; color:#FF6B00; font-weight:bold;">
+          Avantage appliqué automatiquement au checkout.
+        </p>
+      </div>
+      <div style="text-align:center; margin:24px 0;">
+        <a href="https://artiva.app/catalog" style="
+          background:#FF6B00; color:white; padding:14px 35px;
+          text-decoration:none; border-radius:8px; font-weight:bold; display:inline-block;
+        ">
+          🛍️ En profiter maintenant
+        </a>
+      </div>
+    `,
+    pied: "L'équipe Artiva",
+  });
+
+  await sendMailWithLog(
+    {
+      fromName: "Artiva 🎁",
+      fromEmail: "artiva.app@gmail.com",
+      to,
+      subject: "🎁 La livraison vous est offerte !",
+      html: htmlContent,
+    },
+    "Special-Offer"
+  );
+};
+
 module.exports = {
   sendLoginCode,
   sendResetPasswordCode,
@@ -1515,4 +1705,8 @@ module.exports = {
   sendAccountBlockedEmail,
   sendClickReminderEmail,
   sendReviewRequestEmail,
+  sendInactiveUserEmail,
+  sendNewProductsEmail,
+  sendFavoriteCategoryEmail,
+  sendSpecialOfferEmail,
 };
