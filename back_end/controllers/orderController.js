@@ -15,8 +15,8 @@ exports.createOrder = async (req, res) => {
 
   const { 
     cart_items, 
-    shipping_address, 
-    payment_method, 
+    shipping_address,
+    payment_method,
     notes, 
     currency,
     shipping_cost,
