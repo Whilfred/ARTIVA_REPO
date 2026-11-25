@@ -1686,6 +1686,83 @@ const sendSpecialOfferEmail = async (to, name) => {
   );
 };
 
+// =============================================================================
+// EMAIL : Rappel du bon d'achat de bienvenue (si non utilisé)
+// =============================================================================
+
+const sendWelcomePromoReminderEmail = async (to, name, promoCode, amount = 2000) => {
+  const fcfa = (v) => `${Number(v || 0).toLocaleString("fr-FR")} FCFA`;
+
+  const htmlContent = carteEmail({
+    titre: "🎁 Votre bon d'achat vous attend toujours !",
+    couleur: "#FF6B00",
+    corps: `
+      <p style="font-size:16px;">
+        Bonjour ${name || "Cher client"},
+      </p>
+      <p style="font-size:15px;">
+        Content de vous revoir sur Artiva ! 🌟
+      </p>
+      <p style="font-size:15px;">
+        Nous avons remarqué que vous n'avez pas encore utilisé votre
+        <b>bon d'achat de bienvenue de ${fcfa(amount)}</b>.
+        Il est toujours valable, et il n'attend que vous !
+      </p>
+      <div style="
+        text-align:center;
+        margin:25px 0;
+        padding:15px;
+        background:#FFF3E0;
+        border-radius:8px;
+        border:2px dashed #FF6B00;
+      ">
+        <p style="font-size:14px; color:#666; margin:0;">Votre code promo</p>
+        <p style="
+          font-size:32px;
+          font-weight:bold;
+          color:#FF6B00;
+          margin:5px 0;
+          letter-spacing:2px;
+        ">
+          ${promoCode}
+        </p>
+        <p style="font-size:12px; color:#999; margin:5px 0 0 0;">
+          Offre valable une seule fois sur votre première commande
+        </p>
+      </div>
+      <div style="text-align:center; margin:20px 0;">
+        <a href="https://artiva.app/catalog" style="
+          background:#FF6B00;
+          color:white;
+          padding:14px 35px;
+          text-decoration:none;
+          border-radius:5px;
+          font-weight:bold;
+          display:inline-block;
+        ">
+          🛍️ Utiliser mon bon d'achat
+        </a>
+      </div>
+      <p style="font-size:13px; color:#888; text-align:center; margin-top:15px;">
+        💡 Ce bon est offert une seule fois, à l'occasion de votre inscription.<br/>
+        Ne le laissez pas s'envoler !
+      </p>
+    `,
+    pied: "L'équipe Artiva — Votre cadeau de bienvenue",
+  });
+
+  await sendMailWithLog(
+    {
+      fromName: "Artiva 🎁",
+      fromEmail: "artiva.app@gmail.com",
+      to,
+      subject: `🎁 N'oubliez pas votre bon d'achat de ${fcfa(amount)} !`,
+      html: htmlContent,
+    },
+    "Welcome-Promo-Reminder"
+  );
+};
+
 module.exports = {
   sendLoginCode,
   sendResetPasswordCode,
@@ -1709,4 +1786,5 @@ module.exports = {
   sendNewProductsEmail,
   sendFavoriteCategoryEmail,
   sendSpecialOfferEmail,
+  sendWelcomePromoReminderEmail,
 };

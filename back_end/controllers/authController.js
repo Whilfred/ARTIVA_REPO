@@ -9,7 +9,8 @@ const {
   sendWelcomeEmail,
   sendWouhouGiftEmail,
   sendWelcomeBackEmail,
-  sendAdminUserLoginEmail
+  sendAdminUserLoginEmail,
+  sendWelcomePromoReminderEmail
 } = require("../utils/sendEmail.js");
 const { sendPushNotification } = require("../services/fcmService");
 const { logActivity, EVENT_TYPES } = require("../services/activityLogger");
@@ -44,7 +45,6 @@ const loginAdmin = async (req, res) => {
     if (!isMatch)
       return res.status(401).json({ message: "Email ou mot de passe incorrect" });
 
-    // ✅ MODIFIÉ : Plus de expiresIn, le token n'expire jamais
     const token = jwt.sign(
       { id: admin.id, email: admin.email, role: admin.role },
       process.env.JWT_SECRET
@@ -113,6 +113,59 @@ async function notifyUserLogin(userId, userName, userEmail, isFirstLogin) {
       console.log(`📧 Email de connexion envoyé à ${userEmail}`);
     } catch (emailError) {
       console.error(`❌ Erreur email connexion à ${userEmail}:`, emailError.message);
+    }
+
+    // 🎁 RAPPEL BON D'ACHAT DE BIENVENUE (si non utilisé)
+    try {
+      const promoResult = await db.query(
+        `SELECT id, code FROM promo_codes
+         WHERE user_id = $1
+           AND discount_type = 'fixed'
+           AND discount_value = 2000
+           AND description ILIKE '%bienvenue%'
+           AND is_active = true
+         LIMIT 1`,
+        [userId]
+      );
+
+      if (promoResult.rows.length > 0) {
+        const promo = promoResult.rows[0];
+
+        const usageResult = await db.query(
+          'SELECT COUNT(*)::int AS n FROM promo_code_usages WHERE promo_code_id = $1 AND user_id = $2',
+          [promo.id, userId]
+        );
+
+        if (usageResult.rows[0].n === 0) {
+          console.log(`🎁 Bon de bienvenue ${promo.code} non utilisé par user ${userId} → rappel`);
+
+          if (userFcmToken) {
+            try {
+              await sendPushNotification(userFcmToken, {
+                title: '🎁 Votre bon d\'achat de 2000 FCFA vous attend !',
+                body: `Bonjour ${userName}, utilisez votre code ${promo.code} avant qu'il n'expire.`,
+                data: { screen: 'promo', promoCode: promo.code },
+              });
+              console.log(`📲 Push rappel promo envoyée à ${userEmail}`);
+            } catch (pushErr) {
+              console.error(`❌ Erreur push rappel promo à ${userEmail}:`, pushErr.message);
+            }
+          }
+
+          try {
+            await sendWelcomePromoReminderEmail(userEmail, userName, promo.code, 2000);
+            console.log(`📧 Email rappel promo envoyé à ${userEmail}`);
+          } catch (emailErr) {
+            console.error(`❌ Erreur email rappel promo à ${userEmail}:`, emailErr.message);
+          }
+        } else {
+          console.log(`ℹ️ ${userEmail} a déjà utilisé son bon de bienvenue — pas de rappel`);
+        }
+      } else {
+        console.log(`ℹ️ Aucun bon de bienvenue nominatif trouvé pour user ${userId}`);
+      }
+    } catch (promoErr) {
+      console.error(`❌ Erreur rappel bon d'achat (user ${userId}):`, promoErr.message);
     }
 
     try {
@@ -379,7 +432,6 @@ const verifyLoginCode = async (req, res) => {
 
     await db.query("UPDATE login_codes SET is_used=true WHERE id=$1", [codeResult.rows[0].id]);
 
-    // ✅ MODIFIÉ : Plus de expiresIn, le token n'expire jamais
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET
@@ -522,7 +574,6 @@ const googleAuth = async (req, res) => {
       console.log(`[Google Auth] Utilisateur existant mis à jour: ${email} (1ère connexion: ${isFirstLogin})`);
     }
 
-    // ✅ MODIFIÉ : Plus de expiresIn, le token n'expire jamais
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET
@@ -566,5 +617,5 @@ module.exports = {
   verifyLoginCode,
   registerAdmin,
   loginAdmin,
-  googleAuth
+  googleAuth,
 };

@@ -2,38 +2,63 @@ const db = require('../config/db');
 const { sendPushNotification, sendMulticastNotification } = require('./fcmService');
 
 // =============================================================================
+// UTILITAIRE : remplace {nom} par le vrai nom (insensible à la casse)
+// =============================================================================
+
+/**
+ * Remplace les placeholders {nom} / {Nom} / {NOM} par le nom de l'utilisateur.
+ * Si le nom est absent, on met une chaîne vide pour éviter d'afficher "{nom}".
+ */
+const personnaliser = (texte, nom) => {
+  if (typeof texte !== 'string') return texte;
+  return texte.replace(/\{nom\}/gi, nom || '');
+};
+
+// =============================================================================
 // NOTIFIER UN UTILISATEUR SPÉCIFIQUE
 // =============================================================================
 
 /**
  * Envoie une notification push à un utilisateur (via son user_id)
  * ET enregistre une notification in-app en base.
+ * Le placeholder {nom} est remplacé par le vrai nom de l'utilisateur.
  */
 const notifyUser = async (userId, { title, body, data = {}, type = 'general', linkUrl = null, saveInApp = true }) => {
   try {
-    // 1. Récupérer le token FCM de l'utilisateur
+    // 1. Récupérer le token FCM ET le nom de l'utilisateur
     const result = await db.query(
-      'SELECT fcm_token FROM users WHERE id = $1 AND fcm_token IS NOT NULL',
+      'SELECT name, fcm_token FROM users WHERE id = $1',
       [userId]
     );
 
-    // 2. Enregistrer la notification in-app (toujours)
+    if (result.rows.length === 0) {
+      console.log(`ℹ️ Utilisateur ${userId} introuvable`);
+      return { success: false, error: 'Utilisateur introuvable' };
+    }
+
+    const { name: userName, fcm_token: userFcmToken } = result.rows[0];
+
+    // 2. Personnaliser le titre et le corps
+    const finalTitle = personnaliser(title, userName);
+    const finalBody = personnaliser(body, userName);
+
+    // 3. Enregistrer la notification in-app (toujours, avec le texte personnalisé)
     if (saveInApp) {
       await db.query(
         `INSERT INTO notifications (user_id, type, title, message, link_url)
          VALUES ($1, $2, $3, $4, $5)`,
-        [userId, type, title, body, linkUrl]
+        [userId, type, finalTitle, finalBody, linkUrl]
       );
     }
 
-    // 3. Envoyer la push si un token existe
-    if (result.rows.length > 0 && result.rows[0].fcm_token) {
-      const pushResult = await sendPushNotification(result.rows[0].fcm_token, {
-        title,
-        body,
+    // 4. Envoyer la push si un token existe
+    if (userFcmToken) {
+      const pushResult = await sendPushNotification(userFcmToken, {
+        title: finalTitle,
+        body: finalBody,
         data: { ...data, type, linkUrl },
       });
-      console.log(`📲 Push envoyée à user ${userId}:`, pushResult.success ? '✅' : '❌');
+      console.log(`📲 Push envoyée à user ${userId} (${userName}):`, pushResult.success ? '✅' : '❌');
       return pushResult;
     } else {
       console.log(`ℹ️ Pas de token FCM pour user ${userId}, notification in-app seulement`);
@@ -49,39 +74,68 @@ const notifyUser = async (userId, { title, body, data = {}, type = 'general', li
 // NOTIFIER TOUS LES UTILISATEURS (Admin)
 // =============================================================================
 
+/**
+ * Envoie une notification à tous les utilisateurs actifs.
+ * ⚠️ Le message est personnalisé PAR UTILISATEUR (car {nom} diffère pour chacun).
+ * On ne peut donc PAS utiliser un seul multicast avec un texte commun :
+ * on boucle par utilisateur pour l'insertion en base ET l'envoi push.
+ */
 const notifyAllUsers = async ({ title, body, data = {}, type = 'announcement', linkUrl = null }) => {
   try {
     const result = await db.query(
-      `SELECT id, fcm_token FROM users 
-       WHERE fcm_token IS NOT NULL 
-       AND is_active = true 
+      `SELECT id, name, fcm_token FROM users 
+       WHERE is_active = true 
        AND is_deleted = false`
     );
 
     if (result.rows.length === 0) {
-      console.log('⚠️ Aucun utilisateur avec un token FCM');
+      console.log('⚠️ Aucun utilisateur actif');
       return { success: false, error: 'Aucun destinataire' };
     }
 
-    // 1. Enregistrer les notifications in-app en batch
+    let pushedCount = 0;
+    let failedCount = 0;
+
+    // On traite chaque utilisateur individuellement pour personnaliser {nom}
     for (const user of result.rows) {
-      await db.query(
-        `INSERT INTO notifications (user_id, type, title, message, link_url)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [user.id, type, title, body, linkUrl]
-      );
+      const finalTitle = personnaliser(title, user.name);
+      const finalBody = personnaliser(body, user.name);
+
+      // 1. Insertion in-app
+      try {
+        await db.query(
+          `INSERT INTO notifications (user_id, type, title, message, link_url)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [user.id, type, finalTitle, finalBody, linkUrl]
+        );
+      } catch (insertErr) {
+        console.error(`❌ Erreur insertion notif pour user ${user.id}:`, insertErr.message);
+        continue;
+      }
+
+      // 2. Push (uniquement si token présent)
+      if (user.fcm_token) {
+        try {
+          await sendPushNotification(user.fcm_token, {
+            title: finalTitle,
+            body: finalBody,
+            data: { ...data, type, linkUrl },
+          });
+          pushedCount++;
+        } catch (pushErr) {
+          console.error(`❌ Erreur push pour user ${user.id}:`, pushErr.message);
+          failedCount++;
+        }
+      }
     }
 
-    // 2. Envoyer les pushs en multicast
-    const tokens = result.rows.map((u) => u.fcm_token);
-    const pushResult = await sendMulticastNotification(tokens, {
-      title,
-      body,
-      data: { ...data, type, linkUrl },
-    });
-
-    console.log(`📢 Broadcast envoyé à ${result.rows.length} utilisateurs`);
-    return pushResult;
+    console.log(`📢 Broadcast envoyé à ${result.rows.length} utilisateurs (${pushedCount} push réussies, ${failedCount} échecs)`);
+    return {
+      success: true,
+      totalUsers: result.rows.length,
+      pushedCount,
+      failedCount,
+    };
   } catch (error) {
     console.error('❌ Erreur notifyAllUsers:', error.message);
     return { success: false, error: error.message };
